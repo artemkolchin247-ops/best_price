@@ -25,6 +25,8 @@ def optimize_price(
     storage: float,
     hist_min: Optional[float] = None,
     hist_max: Optional[float] = None,
+    hist_min_before: Optional[float] = None,
+    hist_max_before: Optional[float] = None,
     sku_df: Optional[pd.DataFrame] = None,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """Brute-force search best price.
@@ -105,6 +107,16 @@ def optimize_price(
     prices = np.arange(price_min, price_max + step, step)
     results = []
 
+    # Исторические границы в цене ДО СПП (для второго уровня boundary-флага)
+    hist_min_before_effective = hist_min_before
+    hist_max_before_effective = hist_max_before
+    spp_factor = (1.0 - spp)
+    if spp_factor > 0:
+        if hist_min_before_effective is None and hist_min is not None:
+            hist_min_before_effective = float(hist_min) / spp_factor
+        if hist_max_before_effective is None and hist_max is not None:
+            hist_max_before_effective = float(hist_max) / spp_factor
+
     # Предварительный расчет спроса для всей сетки
     raw_preds = []
     customer_prices = []
@@ -182,6 +194,22 @@ def optimize_price(
     best_idx = df_res["profit"].idxmax()
     best_row = df_res.loc[best_idx]
 
+    is_boundary_search = bool(best_idx == 0 or best_idx == len(df_res) - 1)
+
+    # Двухуровневый boundary-флаг: 2) близость к историческим границам
+    is_boundary_history = False
+    tol = float(step)
+    if hist_min_before_effective is not None and hist_max_before_effective is not None:
+        hist_span = float(hist_max_before_effective - hist_min_before_effective)
+        if hist_span > 0:
+            tol = max(float(step), hist_span * 0.02)
+
+        p_opt_before = float(best_row["price_before_spp"])
+        is_boundary_history = (
+            abs(p_opt_before - float(hist_min_before_effective)) <= tol
+            or abs(p_opt_before - float(hist_max_before_effective)) <= tol
+        )
+
     best_info = {
         "best_price_before": best_row["price_before_spp"],
         "best_customer_price": best_row["price_after_spp"],
@@ -189,7 +217,16 @@ def optimize_price(
         "best_sales": best_row["predicted_sales"],
         "best_margin": best_row["margin_unit"],
         "is_extrapolated": best_row["is_extrapolated"],
-        "is_boundary": (best_idx == 0 or best_idx == len(df_res) - 1),
+        "is_boundary_search": is_boundary_search,
+        "is_boundary_history": is_boundary_history,
+        "is_boundary": is_boundary_search,  # backward compatibility alias
+        "boundary_meta": {
+            "search_min": float(df_res["price_before_spp"].min()),
+            "search_max": float(df_res["price_before_spp"].max()),
+            "hist_min_before": float(hist_min_before_effective) if hist_min_before_effective is not None else None,
+            "hist_max_before": float(hist_max_before_effective) if hist_max_before_effective is not None else None,
+            "tol": float(tol)
+        },
         "regime": regime
     }
 
