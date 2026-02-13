@@ -175,13 +175,12 @@ def main():
     st.title("Best Price — оптимизация цены")
     
     # Принудительное обновление для Streamlit Cloud кэша
-    if "version" not in st.session_state or st.session_state["version"] != "1.0.5":
-        st.session_state["version"] = "1.0.5"
-        # Очищаем кэш
-        if "results" in st.session_state:
-            del st.session_state["results"]
-        if "model_result" in st.session_state:
-            del st.session_state["model_result"]
+    if "version" not in st.session_state or st.session_state["version"] != "1.0.6":
+        st.session_state["version"] = "1.0.6"
+        # Очищаем кэш полностью
+        for key in list(st.session_state.keys()):
+            if key != "version":
+                del st.session_state[key]
     
     # Показываем версию для отладки
     st.caption(f"Version: {st.session_state['version']}")
@@ -461,9 +460,9 @@ def main():
             # Обновляем данные если они изменились
             if model_result != st.session_state.get("model_result", {}):
                 st.session_state["model_result"] = model_result
-        
-        # 1. Структурированные логи пайплайна (ТЗ 2) - МАКСИМАЛЬНО ПОДРОБНО
-        with st.expander("### 🔍 Полные логи пайплайна обработки данных", expanded=False):
+
+        with st.expander("### Детализация логов", expanded=False):
+            # 1. Структурированные логи пайплайна (ТЗ 2) - МАКСИМАЛЬНО ПОДРОБНО
             pipeline_log = model_result.get("pipeline_log", {})
             
             if pipeline_log and pipeline_log.get("steps"):
@@ -483,9 +482,9 @@ def main():
                     if step.get("date_min") and step.get("date_max"):
                         period_text = f"{step['date_min']} → {step['date_max']}"
                     
-                    # Добавляем в таблицу
-                    log_data.append({
-                        "№": i + 1,
+                # Добавляем в таблицу
+                log_data.append({
+                    "№": i + 1,
                         "Шаг": f"{status_emoji} {step['name']}",
                         "Статус": step["status"],
                         "Строк": step["rows"],
@@ -498,48 +497,48 @@ def main():
                 # Отображаем таблицу
                 st.dataframe(pd.DataFrame(log_data), use_container_width=True)
                 
-                # Статистика по статусам
-                status_counts = {}
-                for step in pipeline_log["steps"]:
+            # Статистика по статусам
+            status_counts = {}
+            for step in pipeline_log["steps"]:
                     status = step["status"]
                     status_counts[status] = status_counts.get(status, 0) + 1
                 
-                st.markdown("#### 📊 Статистика по статусам")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("✅ Успешных шагов", status_counts.get("ok", 0))
-                with col2:
-                    st.metric("❌ Проваленных шагов", status_counts.get("failed", 0))
-                with col3:
-                    total_steps = len(pipeline_log["steps"])
-                    success_rate = (status_counts.get("ok", 0) / total_steps * 100) if total_steps > 0 else 0
-                    st.metric("📈 Успешных (%)", f"{success_rate:.1f}%")
+            st.markdown("#### 📊 Статистика по статусам")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("✅ Успешных шагов", status_counts.get("ok", 0))
+            with col2:
+                st.metric("❌ Проваленных шагов", status_counts.get("failed", 0))
+            with col3:
+                total_steps = len(pipeline_log["steps"])
+                success_rate = (status_counts.get("ok", 0) / total_steps * 100) if total_steps > 0 else 0
+                st.metric("📈 Успешных (%)", f"{success_rate:.1f}%")
                 
-                # Детальная информация по каждому шагу
-                st.markdown("#### 🔍 Детальная информация по шагам")
-                for i, step in enumerate(pipeline_log["steps"]):
-                    with st.expander(f"Шаг {i+1}: {step['name']} ({step['status']})", expanded=False):
+            # Детальная информация по каждому шагу
+            st.markdown("#### 🔍 Детальная информация по шагам")
+            for i, step in enumerate(pipeline_log["steps"]):
+                with st.expander(f"Шаг {i+1}: {step['name']} ({step['status']})", expanded=False):
                         col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric("Строк", step["rows"])
-                            st.metric("Колонки", step["cols"])
-                            st.metric("Статус", step["status"])
-                        with col2:
-                            # NaN counts детально
-                            nan_counts = step.get("nan_counts", {})
-                            if nan_counts:
-                                st.write("**NaN по полям:**")
-                                for field, count in nan_counts.items():
-                                    if count > 0:
-                                        st.write(f"  • {field}: {count}")
-                            else:
-                                st.write("**NaN:** нет")
-                            
-                            if step.get("date_min") and step.get("date_max"):
-                                st.write(f"**Период:** {step['date_min']} → {step['date_max']}")
-                            
-                            if step.get("notes"):
-                                st.info(f"📝 **Заметки:** {step['notes']}")
+                with col1:
+                    st.metric("Строк", step["rows"])
+                    st.metric("Колонки", step["cols"])
+                    st.metric("Статус", step["status"])
+                with col2:
+                    # NaN counts детально
+                    nan_counts = step.get("nan_counts", {})
+                    if nan_counts:
+                        st.write("**NaN по полям:**")
+                        for field, count in nan_counts.items():
+                            if count > 0:
+                                st.write(f"  • {field}: {count}")
+                    else:
+                        st.write("**NaN:** нет")
+                    
+                    if step.get("date_min") and step.get("date_max"):
+                        st.write(f"**Период:** {step['date_min']} → {step['date_max']}")
+                    
+                    if step.get("notes"):
+                        st.info(f"📝 **Заметки:** {step['notes']}")
             else:
                 st.warning("Логи пайплайна недоступны")
         
@@ -677,7 +676,7 @@ def main():
         p_min_hist = sku_df["price_before_spp"].min()
         p_max_hist = sku_df["price_before_spp"].max()
         st.write(f"Исторический диапазон цен (до СПП): **{p_min_hist:.0f} — {p_max_hist:.0f} RUB**")
-
+        
         st.subheader("1. Анализ спроса и эластичности")
         
         # ⚠️ ВАЖНО: Запрещено пересчитывать метрики в UI! (ТЗ 1.2)
