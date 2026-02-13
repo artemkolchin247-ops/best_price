@@ -176,7 +176,7 @@ def main():
     
     # Принудительное обновление для Streamlit Cloud кэша
     if "version" not in st.session_state:
-        st.session_state["version"] = "1.0.2"
+        st.session_state["version"] = "1.0.3"
     
     # Показываем версию для отладки
     st.caption(f"Version: {st.session_state['version']}")
@@ -539,37 +539,37 @@ def main():
                 st.warning("Логи пайплайна недоступны")
         
         # 2. Детальная информация об ошибках - МАКСИМАЛЬНО ПОДРОБНО
-        st.markdown("### 🚨 Детальная информация об ошибках")
-        error = model_result.get("error", {})
-        
-        if error.get("code"):
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Код ошибки", error.get("code", ""))
-                st.metric("Шаг", error.get("failed_step", ""))
-            with col2:
-                st.metric("Тип исключения", error.get("exception_type", ""))
-                st.metric("Traceback ID", error.get("traceback_id", ""))
-            with col3:
-                st.metric("Data State", model_result.get("data_state", "UNKNOWN"))
-                st.metric("Fit Return", getattr(sf, '_fit_return_value', 'UNKNOWN'))
-            with col4:
-                st.metric("Best Model", model_result.get("model_name", "None"))
-                st.metric("Protective Mode", model_result.get("protective_mode", "None"))
+        with st.expander("### 🚨 Детальная информация об ошибках", expanded=False):
+            error = model_result.get("error", {})
             
-            if error.get("message"):
-                st.error(f"**Сообщение:** {error['message']}")
-            
-            # Декларативные рекомендации
-            recommendations = error.get("recommendations", [])
-            if recommendations:
-                st.markdown("### 💡 Что сделать:")
-                for i, rec in enumerate(recommendations, 1):
-                    st.write(f"{i}. {rec}")
+            if error.get("code"):
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Код ошибки", error.get("code", ""))
+                    st.metric("Шаг", error.get("failed_step", ""))
+                with col2:
+                    st.metric("Тип исключения", error.get("exception_type", ""))
+                    st.metric("Traceback ID", error.get("traceback_id", ""))
+                with col3:
+                    st.metric("Data State", model_result.get("data_state", "UNKNOWN"))
+                    st.metric("Fit Return", getattr(sf, '_fit_return_value', 'UNKNOWN'))
+                with col4:
+                    st.metric("Best Model", model_result.get("model_name", "None"))
+                    st.metric("Protective Mode", model_result.get("protective_mode", "None"))
+                
+                if error.get("message"):
+                    st.error(f"**Сообщение:** {error['message']}")
+                
+                # Декларативные рекомендации
+                recommendations = error.get("recommendations", [])
+                if recommendations:
+                    st.markdown("### 💡 Что сделать:")
+                    for i, rec in enumerate(recommendations, 1):
+                        st.write(f"{i}. {rec}")
+                else:
+                    st.info("Рекомендации недоступны")
             else:
-                st.info("Рекомендации недоступны")
-        else:
-            st.success("✅ Ошибок не обнаружено")
+                st.success("✅ Ошибок не обнаружено")
         
         # 3. Состояние модели и защитные режимы - МАКСИМАЛЬНО ПОДРОБНО
         st.markdown("### 🤖 Состояние модели и защитные режимы")
