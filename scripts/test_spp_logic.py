@@ -38,7 +38,7 @@ def test_spp_sensitivity():
     results = []
     for spp in [0.0, 0.1, 0.3, 0.5]:
         _, best = optimize_price(spp=spp, **common_params)
-        lp = best['best_price_before']
+        lp = best['best_price_before_spp']
         cp = lp * (1 - spp)
         print(f"SPP: {spp*100:>2.0f}% | Оптим. ListPrice: {lp:>7.1f} | CustomerPrice: {cp:>7.1f}")
         results.append(lp)

@@ -258,7 +258,6 @@ def optimize_price(
         results.append(
             {
                 # Backward-compatible alias for external consumers/tests
-                "price_before": p,
                 "price_before_spp": p,
                 "price_after_spp": p_after,
                 "predicted_sales": predicted_q,
@@ -292,7 +291,7 @@ def optimize_price(
         )
 
     best_info = {
-        "best_price_before": best_row["price_before_spp"],
+        "best_price_before_spp": best_row["price_before_spp"],
         "best_customer_price": best_row["price_after_spp"],
         "best_profit": best_row["profit"],
         "best_sales": best_row["predicted_sales"],

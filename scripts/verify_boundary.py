@@ -35,7 +35,7 @@ def test_boundary_optimum():
         spp=0.1,
         sku_df=df
     )
-    print(f"Best Price Left: {best_left['best_price_before']}, Is Boundary: {best_left['is_boundary']}")
+    print(f"Best Price Left: {best_left['best_price_before_spp']}, Is Boundary: {best_left['is_boundary']}")
 
     # Вариант 2: Оптимум на правом краю (максимальная цена - если маржа перекрывает падение спроса)
     # Сделаем COGS очень маленьким, чтобы высокая цена была выгоднее
@@ -53,7 +53,7 @@ def test_boundary_optimum():
         spp=0.1,
         sku_df=df
     )
-    print(f"Best Price Right: {best_right['best_price_before']}, Is Boundary: {best_right['is_boundary']}")
+    print(f"Best Price Right: {best_right['best_price_before_spp']}, Is Boundary: {best_right['is_boundary']}")
 
     if best_left['is_boundary'] and best_right['is_boundary']:
         print("SUCCESS: Boundary optimum detected on both sides.")

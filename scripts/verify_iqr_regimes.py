@@ -47,7 +47,7 @@ def test_regimes():
         print(f"\n--- IQR: {iqr_val} ---")
         print(f"Regime: {best['regime']}")
         print(f"Price Range in results: {res['price_before_spp'].min()} - {res['price_before_spp'].max()}")
-        print(f"Best Price: {best['best_price_before']}")
+        print(f"Best Price: {best['best_price_before_spp']}")
         
     # Test Regime 1 (Stable)
     run_with_iqr(0.2)

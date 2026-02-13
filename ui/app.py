@@ -1257,7 +1257,7 @@ def main():
                 q_opt = best_info['best_sales']
                 profit_opt = best_info['best_profit']
                 margin_opt = best_info['best_margin']
-                p_opt_before = best_info['best_price_before']
+                p_opt_before = best_info['best_price_before_spp']
                 p_opt_after = best_info['best_customer_price']
                 profitability_opt = (margin_opt / p_opt_before) * 100
 
@@ -1312,7 +1312,7 @@ def main():
                 
                 # --- Управленческая рекомендация на основе Grid Search ---
                 st.divider()
-                opt_p = best_info['best_price_before']
+                opt_p = best_info['best_price_before_spp']
                 last_p = last_p_before
                 delta_p = (opt_p - last_p) / last_p
                 

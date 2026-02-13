@@ -42,4 +42,4 @@ print(f"Model trained. Best model: {sf.best_model_name}")
 
 for test_spp in [0.0, 0.1, 0.3, 0.5]:
     res, best = optimize_price(sf, {}, spp=test_spp, **params)
-    print(f"SPP: {test_spp*100:.0f}% | Best Price Before: {best['best_price_before']:.2f} | Best Profit: {best['best_profit']:.2f}")
+    print(f"SPP: {test_spp*100:.0f}% | Best Price Before: {best['best_price_before_spp']:.2f} | Best Profit: {best['best_profit']:.2f}")

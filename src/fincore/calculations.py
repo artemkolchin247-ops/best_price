@@ -7,16 +7,16 @@ from typing import Iterable
 import pandas as pd
 
 
-def commission_per_unit(price_before: pd.Series, commission_rate: float) -> pd.Series:
+def commission_per_unit(price_before_spp: pd.Series, commission_rate: float) -> pd.Series:
     """Комиссия маркетплейса за единицу (в тех же единицах, что и цена).
 
     Args:
-        price_before: Series цен до СПП.
+        price_before_spp: Series цен до СПП.
         commission_rate: доля (например, 0.15).
     Returns:
         Series с комиссией на единицу.
     """
-    return price_before * commission_rate
+    return price_before_spp * commission_rate
 
 
 def vat_per_unit(price_after: pd.Series, vat_rate: float) -> pd.Series:
@@ -29,12 +29,12 @@ def vat_per_unit(price_after: pd.Series, vat_rate: float) -> pd.Series:
     return price_after * vat_rate
 
 
-def revenue_per_row(price_before: pd.Series, qty: pd.Series) -> pd.Series:
-    return price_before * qty
+def revenue_per_row(price_before_spp: pd.Series, qty: pd.Series) -> pd.Series:
+    return price_before_spp * qty
 
 
 def margin_per_unit(
-    price_before: pd.Series,
+    price_before_spp: pd.Series,
     price_after: pd.Series,
     commission_rate: float,
     vat_rate: float,
@@ -44,12 +44,12 @@ def margin_per_unit(
 ) -> pd.Series:
     """Маржа на единицу после вычета переменных затрат и налогов/комиссий.
 
-    Формула: margin_unit = price_before - commission - vat - cogs - logistics - storage
+    Формула: margin_unit = price_before_spp - commission - vat - cogs - logistics - storage
     (VAT считается от price_after)
     """
-    commission = commission_per_unit(price_before, commission_rate)
+    commission = commission_per_unit(price_before_spp, commission_rate)
     vat = vat_per_unit(price_after, vat_rate)
-    return price_before - commission - vat - cogs - logistics - storage
+    return price_before_spp - commission - vat - cogs - logistics - storage
 
 
 def profit_total(
