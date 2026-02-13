@@ -270,6 +270,27 @@ def main():
                     "ad_vk": ad_vk
                 }
                 
+                # Детальная отладка прямо в UI
+                print("=== UI DEBUG: Before optimize_price ===")
+                print(f"sf type: {type(sf)}")
+                print(f"sf.best_model_name: {getattr(sf, 'best_model_name', 'None')}")
+                print(f"base_features: {base_features}")
+                print(f"price_min: {price_min}, price_max: {price_max}, step: {step}")
+                print(f"commission_rate: {commission_pct / 100.0}, vat_rate: {vat_pct / 100.0}, spp: {spp_pct / 100.0}")
+                print(f"cogs: {cogs}, logistics: {logistics}, storage: {storage}")
+                print(f"sku_df type: {type(sku_df)}")
+                print(f"sku_df empty: {sku_df.empty}")
+                print(f"sku_df columns: {list(sku_df.columns)}")
+                
+                # Проверка импорта optimize_price
+                try:
+                    from src.optimizer.bruteforce import optimize_price
+                    print("DEBUG: optimize_price import successful")
+                except ImportError as e:
+                    print(f"ERROR: Cannot import optimize_price: {e}")
+                    st.error(f"❌ Ошибка импорта optimize_price: {e}")
+                    return
+                
                 logger.debug("Checking optimize_price parameters...")
                 logger.debug("sf type: %s", type(sf))
                 logger.debug("base_features: %s", base_features)
@@ -292,6 +313,7 @@ def main():
                     st.error("❌ DataFrame с данными пуст")
                     return
                 
+                print("=== UI DEBUG: Calling optimize_price ===")
                 results, best_info = optimize_price(
                     forecaster=sf,
                     base_features=base_features,

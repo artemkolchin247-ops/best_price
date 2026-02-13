@@ -3,12 +3,23 @@
 Iterates prices in range, predicts sales via provided forecaster, computes
 unit economics and returns table with results and best price by profit.
 """
+print("DEBUG: bruteforce.py module loading...")
+
 from typing import Dict, Any, Tuple, Iterable, Optional
+print("DEBUG: typing import successful")
 
 import numpy as np
-import pandas as pd
+print("DEBUG: numpy import successful")
 
-from src.models.sales_forecast import SalesForecaster
+import pandas as pd
+print("DEBUG: pandas import successful")
+
+try:
+    from src.models.sales_forecast import SalesForecaster
+    print("DEBUG: SalesForecaster import successful")
+except ImportError as e:
+    print(f"ERROR: Cannot import SalesForecaster: {e}")
+    raise
 
 
 def optimize_price(
