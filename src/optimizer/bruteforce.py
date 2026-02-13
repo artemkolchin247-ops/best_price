@@ -42,6 +42,15 @@ def optimize_price(
         sku_df: DataFrame with historical data for additional calculations.
     """
     # Валидация входных параметров
+    print(f"DEBUG: optimize_price called with forecaster type: {type(forecaster)}")
+    print(f"DEBUG: base_features type: {type(base_features)}")
+    print(f"DEBUG: sku_df type: {type(sku_df)}")
+    print(f"DEBUG: sku_df is None: {sku_df is None}")
+    
+    if sku_df is not None:
+        print(f"DEBUG: sku_df empty: {sku_df.empty}")
+        print(f"DEBUG: sku_df columns: {list(sku_df.columns) if hasattr(sku_df, 'columns') else 'No columns attr'}")
+    
     if not isinstance(forecaster, SalesForecaster):
         raise TypeError(f"forecaster must be SalesForecaster, got {type(forecaster)}")
     
@@ -55,11 +64,21 @@ def optimize_price(
     if forecaster.best_model_name is None:
         raise RuntimeError("Forecaster must be trained before optimization")
     
+    print("DEBUG: Basic validation passed")
+    
     # Получаем информацию о модели
-    f_info = forecaster.get_info()
+    try:
+        f_info = forecaster.get_info()
+        print(f"DEBUG: Got forecaster info: {type(f_info)}")
+    except Exception as e:
+        print(f"DEBUG: Error getting forecaster info: {e}")
+        raise
+    
     stability = f_info.get("stability_mode", "S1")
     mono_flag = f_info.get("monotonicity_flag", "monotone")
     protective = f_info.get("protective_mode")
+    
+    print(f"DEBUG: stability={stability}, mono_flag={mono_flag}, protective={protective}")
     
     # Режим оптимизации по умолчанию
     regime = stability
@@ -72,30 +91,49 @@ def optimize_price(
     # Квантили истории для режимов (по price_after_spp)
     p5, p10, p90, p95 = None, None, None, None
     
+    print("DEBUG: Starting sku_df processing")
+    
     if sku_df is not None and not sku_df.empty and "price_after_spp" in sku_df.columns:
         try:
+            print("DEBUG: Processing sku_df for current price")
             last_row_sku = sku_df.sort_values("date").iloc[-1]
+            print(f"DEBUG: Got last row, type: {type(last_row_sku)}")
+            
             current_p_after = float(last_row_sku["price_after_spp"])
+            print(f"DEBUG: Got current_p_after: {current_p_after}")
+            
             # Считаем текущую прибыль (прогнозную) по ТЗ: UnitMargin * Orders
             p_last_before = float(last_row_sku["price_before_spp"])
+            print(f"DEBUG: Got p_last_before: {p_last_before}")
+            
             s_val = spp
             p_after_last = p_last_before * (1.0 - s_val)
             comm_last = p_last_before * commission_rate
             vat_last = p_after_last * vat_rate
             m_last = p_last_before - comm_last - vat_last - cogs - logistics - storage
+            print(f"DEBUG: Calculated margin: {m_last}")
             
             # Прогноз для текущей цены
+            print("DEBUG: Calling predict_sales")
             q_last = forecaster.predict_sales(current_p_after, base_features)
+            print(f"DEBUG: Got q_last: {q_last}")
+            
             current_profit_daily = m_last * q_last
+            print(f"DEBUG: Calculated current_profit_daily: {current_profit_daily}")
             
             # Расчет квантилей
+            print("DEBUG: Calculating quantiles")
             p_after_hist = sku_df["price_after_spp"]
             p5, p10, p90, p95 = p_after_hist.quantile([0.05, 0.1, 0.9, 0.95])
+            print(f"DEBUG: Got quantiles: p5={p5}, p10={p10}, p90={p90}, p95={p95}")
+            
         except (KeyError, IndexError, ValueError, TypeError) as e:
             print(f"Warning: Error processing sku_df: {e}")
             # Устанавливаем значения по умолчанию
             current_p_after = None
             current_profit_daily = None
+    else:
+        print("DEBUG: sku_df is None, empty, or missing price_after_spp column")
 
     # --- Определение режима на основе стабильности и монотонности ---
     reg_min_a, reg_max_a = 0, float("inf")
