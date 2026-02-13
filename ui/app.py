@@ -175,8 +175,13 @@ def main():
     st.title("Best Price — оптимизация цены")
     
     # Принудительное обновление для Streamlit Cloud кэша
-    if "version" not in st.session_state:
-        st.session_state["version"] = "1.0.4"
+    if "version" not in st.session_state or st.session_state["version"] != "1.0.5":
+        st.session_state["version"] = "1.0.5"
+        # Очищаем кэш
+        if "results" in st.session_state:
+            del st.session_state["results"]
+        if "model_result" in st.session_state:
+            del st.session_state["model_result"]
     
     # Показываем версию для отладки
     st.caption(f"Version: {st.session_state['version']}")
@@ -649,8 +654,8 @@ def main():
                 st.info(f"Метрики качества не доступны из-за состояния данных: {data_state}")
             
             # 5. Техническая информация (Debug) - МАКСИМАЛЬНО ПОДРОБНО
-            st.markdown("### 🔍 Техническая информация (Debug)")
-            debug_info = {
+            with st.expander("### 🔍 Техническая информация (Debug)", expanded=False):
+                debug_info = {
                     "model_result": model_result,  # Единый источник данных
                     "features_used": model_result.get("features_used", []),
                     "pipeline_log": model_result.get("pipeline_log", []),  # Канонический атрибут
