@@ -39,6 +39,7 @@ def optimize_price(
     hist_min_before: Optional[float] = None,
     hist_max_before: Optional[float] = None,
     sku_df: Optional[pd.DataFrame] = None,
+    **kwargs  # Добавляем для совместимости
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """Brute-force search best price.
 
@@ -51,7 +52,10 @@ def optimize_price(
         hist_min/hist_max: historical price range for reference.
         hist_min_before/hist_max_before: historical price_before_spp range.
         sku_df: DataFrame with historical data for additional calculations.
+        **kwargs: дополнительные параметры для совместимости
     """
+    print(f"DEBUG: optimize_price called with kwargs: {kwargs}")
+    
     # Валидация входных параметров
     print(f"DEBUG: optimize_price called with forecaster type: {type(forecaster)}")
     print(f"DEBUG: base_features type: {type(base_features)}")
