@@ -1391,7 +1391,16 @@ def main():
         st.dataframe(diag_df[["date", "price_before_spp", "orders", "predicted_orders", "error_pct"]].tail(10))
 
         st.subheader("Таблица всех расчётов")
-        st.dataframe(results)
+        # Переименовываем колонки для понятности пользователю
+        results_display = results.rename(columns={
+            "price_before_spp": "Цена до СПП",
+            "price_after_spp": "Цена после СПП", 
+            "predicted_sales": "Прогноз заказов",
+            "margin_unit": "Маржа на единицу",
+            "profit": "Прибыль",
+            "is_extrapolated": "Экстраполяция"
+        })
+        st.dataframe(results_display)
 
         csv = results.to_csv(index=False).encode("utf-8")
         st.download_button("Скачать CSV", csv, "optimization_results.csv", "text/csv")
