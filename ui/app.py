@@ -1257,7 +1257,20 @@ def main():
                 q_opt = best_info['best_sales']
                 profit_opt = best_info['best_profit']
                 margin_opt = best_info['best_margin']
-                p_opt_before = best_info['best_price_before_spp']
+                
+                # Отладка ключей best_info
+                print(f"DEBUG: best_info keys: {list(best_info.keys())}")
+                
+                # Совместимость с разными версиями optimize_price
+                if 'best_price_before_spp' in best_info:
+                    p_opt_before = best_info['best_price_before_spp']
+                elif 'best_price_before' in best_info:
+                    p_opt_before = best_info['best_price_before']
+                    print("DEBUG: Using legacy key 'best_price_before'")
+                else:
+                    st.error("❌ Не удалось получить оптимальную цену из результатов оптимизации")
+                    return
+                
                 p_opt_after = best_info['best_customer_price']
                 profitability_opt = (margin_opt / p_opt_before) * 100
 
@@ -1312,7 +1325,16 @@ def main():
                 
                 # --- Управленческая рекомендация на основе Grid Search ---
                 st.divider()
-                opt_p = best_info['best_price_before_spp']
+                
+                # Совместимость с разными версиями optimize_price
+                if 'best_price_before_spp' in best_info:
+                    opt_p = best_info['best_price_before_spp']
+                elif 'best_price_before' in best_info:
+                    opt_p = best_info['best_price_before']
+                else:
+                    st.error("❌ Не удалось получить оптимальную цену для рекомендаций")
+                    return
+                
                 last_p = last_p_before
                 delta_p = (opt_p - last_p) / last_p
                 
