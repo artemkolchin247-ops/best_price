@@ -37,11 +37,25 @@ def optimize_price(
         price_min/price_max/step: range for price_before_spp.
         commission_rate, vat_rate, spp: market params (fractions).
         cogs, logistics, storage: per-unit costs (numbers).
-
-    Returns:
-        (results_df, best_info)
+        hist_min/hist_max: historical price range for reference.
+        hist_min_before/hist_max_before: historical price_before_spp range.
+        sku_df: DataFrame with historical data for additional calculations.
     """
-    """Brute-force optimization over price range [price_min, price_max]."""
+    # Валидация входных параметров
+    if not isinstance(forecaster, SalesForecaster):
+        raise TypeError(f"forecaster must be SalesForecaster, got {type(forecaster)}")
+    
+    if not isinstance(base_features, dict):
+        raise TypeError(f"base_features must be dict, got {type(base_features)}")
+    
+    if sku_df is not None and not isinstance(sku_df, pd.DataFrame):
+        raise TypeError(f"sku_df must be pandas.DataFrame or None, got {type(sku_df)}")
+    
+    # Проверка что forecaster обучен
+    if forecaster.best_model_name is None:
+        raise RuntimeError("Forecaster must be trained before optimization")
+    
+    # Получаем информацию о модели
     f_info = forecaster.get_info()
     stability = f_info.get("stability_mode", "S1")
     mono_flag = f_info.get("monotonicity_flag", "monotone")

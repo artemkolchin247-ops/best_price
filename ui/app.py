@@ -263,6 +263,29 @@ def main():
                 logger.debug("data_state: %s", getattr(sf, "data_state", "UNKNOWN"))
                 logger.debug("fit_return: %s", getattr(sf, "_fit_return_value", "UNKNOWN"))
                 
+                # Проверка параметров перед вызовом optimize_price
+                logger.debug("Checking optimize_price parameters...")
+                logger.debug("sf type: %s", type(sf))
+                logger.debug("base_features: %s", base_features)
+                logger.debug("price_min: %s, price_max: %s, step: %s", price_min, price_max, step)
+                logger.debug("commission_rate: %s, vat_rate: %s, spp: %s", commission_pct / 100.0, vat_pct / 100.0, spp_pct / 100.0)
+                logger.debug("cogs: %s, logistics: %s, storage: %s", cogs, logistics, storage)
+                logger.debug("sku_df type: %s, empty: %s", type(sku_df), sku_df.empty if hasattr(sku_df, 'empty') else 'N/A')
+                if hasattr(sku_df, 'columns'):
+                    logger.debug("sku_df columns: %s", list(sku_df.columns))
+                
+                # Проверка наличия необходимых колонок
+                required_cols = ["price_after_spp", "price_before_spp"]
+                missing_cols = [col for col in required_cols if col not in sku_df.columns]
+                if missing_cols:
+                    st.error(f"❌ Отсутствуют необходимые колонки в данных: {missing_cols}")
+                    return
+                
+                # Проверка что sku_df не пустой
+                if sku_df.empty:
+                    st.error("❌ DataFrame с данными пуст")
+                    return
+                
                 results, best_info = optimize_price(
                     forecaster=sf,
                     base_features={
