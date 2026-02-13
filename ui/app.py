@@ -197,34 +197,57 @@ def main():
     )
     set_debug_level(debug_level)
 
-    st.sidebar.header("3. Параметры рынка")
-    commission_pct = st.sidebar.number_input("Комиссия (%)", value=36.0, step=0.5)
-    vat_pct = st.sidebar.number_input("НДС (%)", value=5.0, step=0.5)
-    spp_pct = st.sidebar.number_input("СПП (%)", value=32.0, step=0.1)
-
-    st.sidebar.header("4. Реклама (дневной бюджет)")
-    ad_internal = st.sidebar.number_input("Реклама внут., ₽", value=0.0, step=100.0)
-    ad_bloggers = st.sidebar.number_input("Реклама блогеры, ₽", value=0.0, step=100.0)
-    ad_vk = st.sidebar.number_input("Реклама ВК, ₽", value=0.0, step=100.0)
-    total_ad_spend = ad_internal + ad_bloggers + ad_vk
-
     if df is None:
         st.info("Загрузите хотя бы один Excel-файл в боковой панели.")
         st.markdown("**Ожидаемые колонки (пример):**")
         st.write(DEFAULT_COLUMNS)
         return
 
-    # SKU selection
+    st.sidebar.header("3. Параметры рынка")
+    commission_pct = st.sidebar.number_input("Комиссия (%)", value=36.0, step=0.5)
+    vat_pct = st.sidebar.number_input("НДС (%)", value=5.0, step=0.5)
+    spp_pct = st.sidebar.number_input("СПП (%)", value=32.0, step=0.1)
+
     skus = sorted(df["sku"].astype(str).unique())
     selected_sku = st.sidebar.selectbox("Выберите SKU", skus)
 
     sku_df = df[df["sku"].astype(str) == str(selected_sku)].copy()
     st.markdown(f"**Анализ SKU:** {selected_sku} — строк: {len(sku_df)}")
+    
+    st.sidebar.header("4. Реклама (дневной бюджет)")
+    ad_budget_mode = st.sidebar.selectbox(
+        "Источник рекламного бюджета",
+        ["Ручной ввод", "Авто: среднее за 30 дней"],
+        index=1,
+        help="Авто-режим подставляет средние дневные расходы по выбранному SKU за последние 30 дней.",
+    )
+
+    sku_recent = sku_df
+    if "date" in sku_df.columns:
+        sku_recent = sku_df.sort_values("date")
+    sku_recent = sku_recent.tail(30)
+
+    if ad_budget_mode == "Авто: среднее за 30 дней":
+        ad_internal = float(sku_recent["ad_internal"].mean()) if "ad_internal" in sku_recent.columns else 0.0
+        ad_bloggers = float(sku_recent["ad_bloggers"].mean()) if "ad_bloggers" in sku_recent.columns else 0.0
+        ad_vk = float(sku_recent["ad_vk"].mean()) if "ad_vk" in sku_recent.columns else 0.0
+        st.sidebar.caption(
+            f"Подставлены средние за последние {len(sku_recent)} дней по выбранному SKU."
+        )
+        st.sidebar.write(f"Реклама внут.: {ad_internal:,.2f} ₽")
+        st.sidebar.write(f"Реклама блогеры: {ad_bloggers:,.2f} ₽")
+        st.sidebar.write(f"Реклама ВК: {ad_vk:,.2f} ₽")
+    else:
+        ad_internal = st.sidebar.number_input("Реклама внут., ₽", value=0.0, step=100.0)
+        ad_bloggers = st.sidebar.number_input("Реклама блогеры, ₽", value=0.0, step=100.0)
+        ad_vk = st.sidebar.number_input("Реклама ВК, ₽", value=0.0, step=100.0)
+
+    total_ad_spend = ad_internal + ad_bloggers + ad_vk
 
     st.header("Исходные данные (преобразованные)")
     st.dataframe(sku_df)
 
-    st.sidebar.header("3. Настройки оптимизации")
+    st.sidebar.header("5. Настройки оптимизации")
     price_min = st.sidebar.number_input(
         "Мин. цена (до СПП)", value=float(sku_df["price_before_spp"].min()), format="%.2f"
     )
