@@ -1391,8 +1391,14 @@ def main():
         st.dataframe(diag_df[["date", "price_before_spp", "orders", "predicted_orders", "error_pct"]].tail(10))
 
         st.subheader("Таблица всех расчётов")
+        # Убираем дублирующую колонку price_before если она есть (совместимость со старыми версиями)
+        results_clean = results.copy()
+        if "price_before" in results_clean.columns:
+            results_clean = results_clean.drop(columns=["price_before"])
+            print("DEBUG: Removed duplicate 'price_before' column")
+        
         # Переименовываем колонки для понятности пользователю
-        results_display = results.rename(columns={
+        results_display = results_clean.rename(columns={
             "price_before_spp": "Цена до СПП",
             "price_after_spp": "Цена после СПП", 
             "predicted_sales": "Прогноз заказов",
@@ -1402,7 +1408,7 @@ def main():
         })
         st.dataframe(results_display)
 
-        csv = results.to_csv(index=False).encode("utf-8")
+        csv = results_display.to_csv(index=False).encode("utf-8")
         st.download_button("Скачать CSV", csv, "optimization_results.csv", "text/csv")
 
 
