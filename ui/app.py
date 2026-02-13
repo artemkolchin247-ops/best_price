@@ -439,13 +439,218 @@ def main():
         # Получаем результаты модели
         model_result = sf.get_model_result() if hasattr(sf, 'get_model_result') else {}
         
-        # Отображаем единый summary запуска
-        summary = create_run_summary(run_params, best_info, model_result)
-        display_run_summary(summary)
+        # --- Детализация логов ---
         
-        # Отображаем единый блок рисков
-        risks = create_risks_summary(best_info, model_result)
-        display_risks(risks)
+        # 1. Структурированные логи пайплайна (ТЗ 2) - МАКСИМАЛЬНО ПОДРОБНО
+        st.markdown("### 🔍 Полные логи пайплайна обработки данных")
+        pipeline_log = model_result.get("pipeline_log", {})
+        
+        if pipeline_log and pipeline_log.get("steps"):
+            st.write(f"**Run ID:** `{pipeline_log.get('run_id', 'N/A')}`")
+            
+            # Создаем таблицу с детальной информацией
+            log_data = []
+            for i, step in enumerate(pipeline_log["steps"]):
+                status_emoji = "✅" if step["status"] == "ok" else "❌"
+                
+                # NaN counts
+                nan_counts = step.get("nan_counts", {})
+                nan_text = ", ".join([f"{k}:{v}" for k, v in nan_counts.items() if v > 0]) or "нет"
+                
+                # Период данных
+                period_text = "N/A"
+                if step.get("date_min") and step.get("date_max"):
+                    period_text = f"{step['date_min']} → {step['date_max']}"
+                
+                # Добавляем в таблицу
+                log_data.append({
+                    "№": i + 1,
+                    "Шаг": f"{status_emoji} {step['name']}",
+                    "Статус": step["status"],
+                    "Строк": step["rows"],
+                    "Колонки": step["cols"],
+                    "NaN": nan_text,
+                    "Период": period_text,
+                    "Заметки": step.get("notes", "нет")
+                })
+            
+            # Отображаем таблицу
+            st.dataframe(pd.DataFrame(log_data), use_container_width=True)
+            
+            # Статистика по статусам
+            status_counts = {}
+            for step in pipeline_log["steps"]:
+                status = step["status"]
+                status_counts[status] = status_counts.get(status, 0) + 1
+            
+            st.markdown("#### 📊 Статистика по статусам")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("✅ Успешных шагов", status_counts.get("ok", 0))
+            with col2:
+                st.metric("❌ Проваленных шагов", status_counts.get("failed", 0))
+            with col3:
+                total_steps = len(pipeline_log["steps"])
+                success_rate = (status_counts.get("ok", 0) / total_steps * 100) if total_steps > 0 else 0
+                st.metric("📈 Успешных (%)", f"{success_rate:.1f}%")
+            
+            # Детальная информация по каждому шагу
+            st.markdown("#### 🔍 Детальная информация по шагам")
+            for i, step in enumerate(pipeline_log["steps"]):
+                with st.expander(f"Шаг {i+1}: {step['name']} ({step['status']})"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Строк", step["rows"])
+                        st.metric("Колонки", step["cols"])
+                        st.metric("Статус", step["status"])
+                    with col2:
+                        # NaN counts детально
+                        nan_counts = step.get("nan_counts", {})
+                        if nan_counts:
+                            st.write("**NaN по полям:**")
+                            for field, count in nan_counts.items():
+                                if count > 0:
+                                    st.write(f"  • {field}: {count}")
+                        else:
+                            st.write("**NaN:** нет")
+                        
+                        if step.get("date_min") and step.get("date_max"):
+                            st.write(f"**Период:** {step['date_min']} → {step['date_max']}")
+                        
+                        if step.get("notes"):
+                            st.info(f"📝 **Заметки:** {step['notes']}")
+        else:
+            st.warning("Логи пайплайна недоступны")
+        
+        # 2. Детальная информация об ошибках - МАКСИМАЛЬНО ПОДРОБНО
+        st.markdown("### 🚨 Детальная информация об ошибках")
+        error = model_result.get("error", {})
+        
+        if error.get("code"):
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Код ошибки", error.get("code", ""))
+                st.metric("Шаг", error.get("failed_step", ""))
+            with col2:
+                st.metric("Тип исключения", error.get("exception_type", ""))
+                st.metric("Traceback ID", error.get("traceback_id", ""))
+            with col3:
+                st.metric("Data State", model_result.get("data_state", "UNKNOWN"))
+                st.metric("Fit Return", getattr(sf, '_fit_return_value', 'UNKNOWN'))
+            with col4:
+                st.metric("Best Model", model_result.get("model_name", "None"))
+                st.metric("Protective Mode", model_result.get("protective_mode", "None"))
+            
+            if error.get("message"):
+                st.error(f"**Сообщение:** {error['message']}")
+            
+            # Декларативные рекомендации
+            recommendations = error.get("recommendations", [])
+            if recommendations:
+                st.markdown("### 💡 Что сделать:")
+                for i, rec in enumerate(recommendations, 1):
+                    st.write(f"{i}. {rec}")
+            else:
+                st.info("Рекомендации недоступны")
+        else:
+            st.success("✅ Ошибок не обнаружено")
+        
+        # 3. Состояние модели и защитные режимы - МАКСИМАЛЬНО ПОДРОБНО
+        st.markdown("### 🤖 Состояние модели и защитные режимы")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Data State", model_result.get("data_state", "UNKNOWN"))
+            st.metric("Best Model", model_result.get("model_name", "None"))
+            st.metric("Protective Mode", model_result.get("protective_mode", "None"))
+        with col2:
+            st.metric("Stability Mode", model_result.get("stability_mode", "UNKNOWN"))
+            st.metric("Monotonicity", model_result.get("monotonicity_flag", "UNKNOWN"))
+            st.metric("Improvement", f"{model_result.get('improvement_vs_baseline', 0):.3f}")
+        with col3:
+            st.metric("Fit Return", getattr(sf, '_fit_return_value', 'UNKNOWN'))
+            st.metric("Features Used", len(model_result.get("features_used", [])))
+            st.metric("Elasticity Med", f"{model_result.get('elasticity', {}).get('elasticity_med', 0):.3f}")
+        
+        # Детальная информация о признаках
+        features_used = model_result.get("features_used", [])
+        if features_used:
+            st.markdown("#### 🔧 Используемые признаки")
+            st.write(", ".join(features_used))
+        
+        # Детальная информация об эластичности
+        elasticity = model_result.get("elasticity", {})
+        if elasticity:
+            st.markdown("#### 📈 Детальная информация об эластичности")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Elasticity Med", f"{elasticity.get('elasticity_med', 0):.3f}")
+                st.metric("Elasticity IQR", f"{elasticity.get('elasticity_iqr', 0):.3f}")
+            with col2:
+                st.metric("Beta Median", f"{elasticity.get('beta_median', 0):.3f}")
+                st.metric("Beta IQR", f"{elasticity.get('beta_iqr', 0):.3f}")
+            with col3:
+                st.metric("Mono Violations", elasticity.get('mono_violations', 0))
+                st.metric("R Squared", f"{elasticity.get('r_squared', 0):.3f}")
+                
+            # Статистика локальной эластичности
+            e_stats = elasticity.get('e_stats', {})
+            if e_stats:
+                st.markdown("##### 📊 Статистика локальной эластичности")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("E Mean", f"{e_stats.get('mean', 0):.3f}")
+                    st.metric("E Std", f"{e_stats.get('std', 0):.3f}")
+                with col2:
+                    st.metric("E Min", f"{e_stats.get('min', 0):.3f}")
+                    st.metric("E Max", f"{e_stats.get('max', 0):.3f}")
+                with col3:
+                    st.metric("E 25%", f"{e_stats.get('q25', 0):.3f}")
+                    st.metric("E 75%", f"{e_stats.get('q75', 0):.3f}")
+                with col4:
+                    st.metric("Valid Points", e_stats.get('valid_points', 0))
+                    st.metric("Total Points", e_stats.get('total_points', 0))
+            
+            # 4. Метрики качества - только при data_state == "OK" (ТЗ)
+            data_state = model_result.get("data_state", "UNKNOWN")
+            if data_state == "OK":
+                st.markdown("### 📊 Метрики качества данных")
+                q = model_result.get("quality", {})
+                if q:
+                    col_q1, col_q2, col_q3, col_q4 = st.columns(4)
+                    col_q1.metric("Дней с данными", q.get("n_days", 0))
+                    col_q2.metric("Уникальных цен", q.get("n_price_unique", 0))
+                    col_q3.metric("Вариация цены (CV)", f"{q.get('price_cv', 0)*100:.1f}%")
+                    col_q4.metric("Доля нулей", f"{q.get('zero_share', 0)*100:.0f}%")
+                    
+                    if q.get("data_ok"):
+                        st.success("✅ Данных достаточно для обучения эластичности.")
+                    else:
+                        st.warning("⚠️ Данных критически мало или цена не менялась.")
+                else:
+                    st.info("Метрики качества недоступны")
+            else:
+                st.markdown("### ⚠️ Метрики качества недоступны")
+                st.info(f"Метрики качества не доступны из-за состояния данных: {data_state}")
+            
+            # 5. Техническая информация (Debug) - МАКСИМАЛЬНО ПОДРОБНО
+            st.markdown("### 🔍 Техническая информация (Debug)")
+            debug_info = {
+                "model_result": model_result,  # Единый источник данных
+                "features_used": model_result.get("features_used", []),
+                "pipeline_log": model_result.get("pipeline_log", []),  # Канонический атрибут
+                "debug_info": {
+                    "best_model_name": sf.best_model_name,
+                    "data_state": getattr(sf, 'data_state', 'UNKNOWN'),
+                    "fit_return_value": getattr(sf, '_fit_return_value', 'UNKNOWN'),
+                    "error": getattr(sf, 'error', {}),
+                    "quality_info": getattr(sf, 'quality_info', {}),
+                    "elasticity_info": getattr(sf, 'elasticity_info', {}),
+                    "performance_info": getattr(sf, 'performance_info', {}),
+                    "feature_cols": getattr(sf, 'feature_cols', []),
+                    "models": list(getattr(sf, 'models', {}).keys())
+                }
+            }
+            st.json(debug_info)
         
         # Historical context
         p_min_hist = sku_df["price_before_spp"].min()
