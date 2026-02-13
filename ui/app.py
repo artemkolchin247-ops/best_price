@@ -314,24 +314,36 @@ def main():
                     return
                 
                 print("=== UI DEBUG: Calling optimize_price ===")
-                results, best_info = optimize_price(
-                    forecaster=sf,
-                    base_features=base_features,
-                    price_min=price_min,
-                    price_max=price_max,
-                    step=step,
-                    commission_rate=commission_pct / 100.0,
-                    vat_rate=vat_pct / 100.0,
-                    spp=spp_pct / 100.0,
-                    cogs=cogs,
-                    logistics=logistics,
-                    storage=storage,
-                    hist_min=sku_df["price_after_spp"].min(),
-                    hist_max=sku_df["price_after_spp"].max(),
-                    hist_min_before=sku_df["price_before_spp"].min(),
-                    hist_max_before=sku_df["price_before_spp"].max(),
-                    sku_df=sku_df  # Передаем sku_df для расчета режимов и текущей прибыли
-                )
+                try:
+                    results, best_info = optimize_price(
+                        forecaster=sf,
+                        base_features=base_features,
+                        price_min=price_min,
+                        price_max=price_max,
+                        step=step,
+                        commission_rate=commission_pct / 100.0,
+                        vat_rate=vat_pct / 100.0,
+                        spp=spp_pct / 100.0,
+                        cogs=cogs,
+                        logistics=logistics,
+                        storage=storage,
+                        hist_min=sku_df["price_after_spp"].min(),
+                        hist_max=sku_df["price_after_spp"].max(),
+                        hist_min_before=sku_df["price_before_spp"].min(),
+                        hist_max_before=sku_df["price_before_spp"].max(),
+                        sku_df=sku_df  # Передаем sku_df для расчета режимов и текущей прибыли
+                    )
+                    print("=== UI DEBUG: optimize_price completed successfully ===")
+                except Exception as e:
+                    print(f"=== UI DEBUG: optimize_price failed with error ===")
+                    print(f"Error type: {type(e)}")
+                    print(f"Error message: {str(e)}")
+                    print(f"Error args: {e.args}")
+                    import traceback
+                    print(f"Full traceback:")
+                    traceback.print_exc()
+                    st.error(f"❌ Ошибка при оптимизации: {type(e).__name__}: {str(e)}")
+                    return
             except RuntimeError as e:
                 # Показываем информативное сообщение об ошибке
                 st.error(f"🚫 **Ошибка оптимизации:** {str(e)}")
