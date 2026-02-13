@@ -175,8 +175,8 @@ def main():
     st.title("Best Price — оптимизация цены")
     
     # Принудительное обновление для Streamlit Cloud кэша
-    if "version" not in st.session_state or st.session_state["version"] != "1.0.6":
-        st.session_state["version"] = "1.0.6"
+    if "version" not in st.session_state or st.session_state["version"] != "1.0.7":
+        st.session_state["version"] = "1.0.7"
         # Очищаем кэш полностью
         for key in list(st.session_state.keys()):
             if key != "version":
@@ -463,6 +463,7 @@ def main():
 
         with st.expander("### Детализация логов", expanded=False):
             # 1. Структурированные логи пайплайна (ТЗ 2) - МАКСИМАЛЬНО ПОДРОБНО
+            st.markdown("### 🔍 Полные логи пайплайна обработки данных")
             pipeline_log = model_result.get("pipeline_log", {})
             
             if pipeline_log and pipeline_log.get("steps"):
