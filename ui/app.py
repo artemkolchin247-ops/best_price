@@ -264,6 +264,12 @@ def main():
                 logger.debug("fit_return: %s", getattr(sf, "_fit_return_value", "UNKNOWN"))
                 
                 # Проверка параметров перед вызовом optimize_price
+                base_features = {
+                    "ad_internal": ad_internal,
+                    "ad_bloggers": ad_bloggers,
+                    "ad_vk": ad_vk
+                }
+                
                 logger.debug("Checking optimize_price parameters...")
                 logger.debug("sf type: %s", type(sf))
                 logger.debug("base_features: %s", base_features)
@@ -288,11 +294,7 @@ def main():
                 
                 results, best_info = optimize_price(
                     forecaster=sf,
-                    base_features={
-                        "ad_internal": ad_internal,
-                        "ad_bloggers": ad_bloggers,
-                        "ad_vk": ad_vk
-                    },
+                    base_features=base_features,
                     price_min=price_min,
                     price_max=price_max,
                     step=step,
