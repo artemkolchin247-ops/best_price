@@ -154,7 +154,7 @@ def create_run_summary(params, best_info, model_result):
 
 def display_run_summary(summary):
     """Отобразить единый summary запуска"""
-    st.markdown("### 📋 Сводка запуска")
+    st.markdown("### Детализация логов")
     
     for section_name, section_data in summary.items():
         with st.expander(f"{section_name}", expanded=True):
