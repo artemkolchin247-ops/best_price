@@ -176,7 +176,7 @@ def main():
     
     # Принудительное обновление для Streamlit Cloud кэша
     if "version" not in st.session_state:
-        st.session_state["version"] = "1.0.3"
+        st.session_state["version"] = "1.0.4"
     
     # Показываем версию для отладки
     st.caption(f"Version: {st.session_state['version']}")
@@ -649,8 +649,8 @@ def main():
                 st.info(f"Метрики качества не доступны из-за состояния данных: {data_state}")
             
             # 5. Техническая информация (Debug) - МАКСИМАЛЬНО ПОДРОБНО
-            with st.expander("### 🔍 Техническая информация (Debug)", expanded=False):
-                debug_info = {
+            st.markdown("### 🔍 Техническая информация (Debug)")
+            debug_info = {
                     "model_result": model_result,  # Единый источник данных
                     "features_used": model_result.get("features_used", []),
                     "pipeline_log": model_result.get("pipeline_log", []),  # Канонический атрибут
@@ -666,7 +666,7 @@ def main():
                         "models": list(getattr(sf, 'models', {}).keys())
                     }
                 }
-                st.json(debug_info)
+            st.json(debug_info)
         
         # Historical context
         p_min_hist = sku_df["price_before_spp"].min()
