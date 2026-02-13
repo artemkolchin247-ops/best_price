@@ -176,7 +176,7 @@ def main():
     
     # Принудительное обновление для Streamlit Cloud кэша
     if "version" not in st.session_state:
-        st.session_state["version"] = "1.0.1"
+        st.session_state["version"] = "1.0.2"
     
     # Показываем версию для отладки
     st.caption(f"Version: {st.session_state['version']}")
@@ -458,85 +458,85 @@ def main():
                 st.session_state["model_result"] = model_result
         
         # 1. Структурированные логи пайплайна (ТЗ 2) - МАКСИМАЛЬНО ПОДРОБНО
-        st.markdown("### 🔍 Полные логи пайплайна обработки данных")
-        pipeline_log = model_result.get("pipeline_log", {})
-        
-        if pipeline_log and pipeline_log.get("steps"):
-            st.write(f"**Run ID:** `{pipeline_log.get('run_id', 'N/A')}`")
+        with st.expander("### 🔍 Полные логи пайплайна обработки данных", expanded=False):
+            pipeline_log = model_result.get("pipeline_log", {})
             
-            # Создаем таблицу с детальной информацией
-            log_data = []
-            for i, step in enumerate(pipeline_log["steps"]):
-                status_emoji = "✅" if step["status"] == "ok" else "❌"
+            if pipeline_log and pipeline_log.get("steps"):
+                st.write(f"**Run ID:** `{pipeline_log.get('run_id', 'N/A')}`")
                 
-                # NaN counts
-                nan_counts = step.get("nan_counts", {})
-                nan_text = ", ".join([f"{k}:{v}" for k, v in nan_counts.items() if v > 0]) or "нет"
+                # Создаем таблицу с детальной информацией
+                log_data = []
+                for i, step in enumerate(pipeline_log["steps"]):
+                    status_emoji = "✅" if step["status"] == "ok" else "❌"
+                    
+                    # NaN counts
+                    nan_counts = step.get("nan_counts", {})
+                    nan_text = ", ".join([f"{k}:{v}" for k, v in nan_counts.items() if v > 0]) or "нет"
+                    
+                    # Период данных
+                    period_text = "N/A"
+                    if step.get("date_min") and step.get("date_max"):
+                        period_text = f"{step['date_min']} → {step['date_max']}"
+                    
+                    # Добавляем в таблицу
+                    log_data.append({
+                        "№": i + 1,
+                        "Шаг": f"{status_emoji} {step['name']}",
+                        "Статус": step["status"],
+                        "Строк": step["rows"],
+                        "Колонки": step["cols"],
+                        "NaN": nan_text,
+                        "Период": period_text,
+                        "Заметки": step.get("notes", "нет")
+                    })
                 
-                # Период данных
-                period_text = "N/A"
-                if step.get("date_min") and step.get("date_max"):
-                    period_text = f"{step['date_min']} → {step['date_max']}"
+                # Отображаем таблицу
+                st.dataframe(pd.DataFrame(log_data), use_container_width=True)
                 
-                # Добавляем в таблицу
-                log_data.append({
-                    "№": i + 1,
-                    "Шаг": f"{status_emoji} {step['name']}",
-                    "Статус": step["status"],
-                    "Строк": step["rows"],
-                    "Колонки": step["cols"],
-                    "NaN": nan_text,
-                    "Период": period_text,
-                    "Заметки": step.get("notes", "нет")
-                })
-            
-            # Отображаем таблицу
-            st.dataframe(pd.DataFrame(log_data), use_container_width=True)
-            
-            # Статистика по статусам
-            status_counts = {}
-            for step in pipeline_log["steps"]:
-                status = step["status"]
-                status_counts[status] = status_counts.get(status, 0) + 1
-            
-            st.markdown("#### 📊 Статистика по статусам")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("✅ Успешных шагов", status_counts.get("ok", 0))
-            with col2:
-                st.metric("❌ Проваленных шагов", status_counts.get("failed", 0))
-            with col3:
-                total_steps = len(pipeline_log["steps"])
-                success_rate = (status_counts.get("ok", 0) / total_steps * 100) if total_steps > 0 else 0
-                st.metric("📈 Успешных (%)", f"{success_rate:.1f}%")
-            
-            # Детальная информация по каждому шагу
-            st.markdown("#### 🔍 Детальная информация по шагам")
-            for i, step in enumerate(pipeline_log["steps"]):
-                with st.expander(f"Шаг {i+1}: {step['name']} ({step['status']})", expanded=False):
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Строк", step["rows"])
-                        st.metric("Колонки", step["cols"])
-                        st.metric("Статус", step["status"])
-                    with col2:
-                        # NaN counts детально
-                        nan_counts = step.get("nan_counts", {})
-                        if nan_counts:
-                            st.write("**NaN по полям:**")
-                            for field, count in nan_counts.items():
-                                if count > 0:
-                                    st.write(f"  • {field}: {count}")
-                        else:
-                            st.write("**NaN:** нет")
-                        
-                        if step.get("date_min") and step.get("date_max"):
-                            st.write(f"**Период:** {step['date_min']} → {step['date_max']}")
-                        
-                        if step.get("notes"):
-                            st.info(f"📝 **Заметки:** {step['notes']}")
-        else:
-            st.warning("Логи пайплайна недоступны")
+                # Статистика по статусам
+                status_counts = {}
+                for step in pipeline_log["steps"]:
+                    status = step["status"]
+                    status_counts[status] = status_counts.get(status, 0) + 1
+                
+                st.markdown("#### 📊 Статистика по статусам")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("✅ Успешных шагов", status_counts.get("ok", 0))
+                with col2:
+                    st.metric("❌ Проваленных шагов", status_counts.get("failed", 0))
+                with col3:
+                    total_steps = len(pipeline_log["steps"])
+                    success_rate = (status_counts.get("ok", 0) / total_steps * 100) if total_steps > 0 else 0
+                    st.metric("📈 Успешных (%)", f"{success_rate:.1f}%")
+                
+                # Детальная информация по каждому шагу
+                st.markdown("#### 🔍 Детальная информация по шагам")
+                for i, step in enumerate(pipeline_log["steps"]):
+                    with st.expander(f"Шаг {i+1}: {step['name']} ({step['status']})", expanded=False):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Строк", step["rows"])
+                            st.metric("Колонки", step["cols"])
+                            st.metric("Статус", step["status"])
+                        with col2:
+                            # NaN counts детально
+                            nan_counts = step.get("nan_counts", {})
+                            if nan_counts:
+                                st.write("**NaN по полям:**")
+                                for field, count in nan_counts.items():
+                                    if count > 0:
+                                        st.write(f"  • {field}: {count}")
+                            else:
+                                st.write("**NaN:** нет")
+                            
+                            if step.get("date_min") and step.get("date_max"):
+                                st.write(f"**Период:** {step['date_min']} → {step['date_max']}")
+                            
+                            if step.get("notes"):
+                                st.info(f"📝 **Заметки:** {step['notes']}")
+            else:
+                st.warning("Логи пайплайна недоступны")
         
         # 2. Детальная информация об ошибках - МАКСИМАЛЬНО ПОДРОБНО
         st.markdown("### 🚨 Детальная информация об ошибках")
