@@ -263,26 +263,39 @@ def main():
                 logger.debug("data_state: %s", getattr(sf, "data_state", "UNKNOWN"))
                 logger.debug("fit_return: %s", getattr(sf, "_fit_return_value", "UNKNOWN"))
                 
-                results, best_info = optimize_price(
-                    forecaster=sf,
-                    base_features={
+                optimize_kwargs = {
+                    "forecaster": sf,
+                    "base_features": {
                         "ad_internal": ad_internal,
                         "ad_bloggers": ad_bloggers,
                         "ad_vk": ad_vk
                     },
-                    price_min=price_min,
-                    price_max=price_max,
-                    step=step,
-                    commission_rate=commission_pct / 100.0,
-                    vat_rate=vat_pct / 100.0,
-                    spp=spp_pct / 100.0,
-                    cogs=cogs,
-                    logistics=logistics,
-                    storage=storage,
-                    hist_min=sku_df["price_after_spp"].min(),
-                    hist_max=sku_df["price_after_spp"].max(),
-                    sku_df=sku_df  # Передаем sku_df для расчета режимов и текущей прибыли
-                )
+                    "price_min": price_min,
+                    "price_max": price_max,
+                    "step": step,
+                    "commission_rate": commission_pct / 100.0,
+                    "vat_rate": vat_pct / 100.0,
+                    "spp": spp_pct / 100.0,
+                    "cogs": cogs,
+                    "logistics": logistics,
+                    "storage": storage,
+                    "hist_min": sku_df["price_after_spp"].min(),
+                    "hist_max": sku_df["price_after_spp"].max(),
+                    "hist_min_before": sku_df["price_before_spp"].min(),
+                    "hist_max_before": sku_df["price_before_spp"].max(),
+                    "sku_df": sku_df  # Передаем sku_df для расчета режимов и текущей прибыли
+                }
+
+                try:
+                    results, best_info = optimize_price(**optimize_kwargs)
+                except TypeError as e:
+                    # Backward compatibility для сред, где optimize_price еще без hist_*_before
+                    if "hist_min_before" in str(e) or "hist_max_before" in str(e):
+                        optimize_kwargs.pop("hist_min_before", None)
+                        optimize_kwargs.pop("hist_max_before", None)
+                        results, best_info = optimize_price(**optimize_kwargs)
+                    else:
+                        raise
             except RuntimeError as e:
                 # Показываем информативное сообщение об ошибке
                 st.error(f"🚫 **Ошибка оптимизации:** {str(e)}")
@@ -679,29 +692,39 @@ def main():
         def sanity_check(model_result, ui_values):
             """Проверка согласованности данных модели и UI."""
             errors = []
-            
-            # Проверка improvement
+
+            # Проверка improvement между блоками model/performance/UI
             model_improvement = model_result.get("improvement_vs_baseline", 0)
+            performance_improvement = model_result.get("performance", {}).get("improvement_vs_baseline", 0)
             ui_improvement = ui_values.get("improvement", 0)
+            if abs(model_improvement - performance_improvement) > 1e-6:
+                errors.append(
+                    f"Improvement mismatch: model={model_improvement:.6f}, performance={performance_improvement:.6f}"
+                )
             if abs(model_improvement - ui_improvement) > 1e-6:
                 errors.append(f"Improvement mismatch: model={model_improvement:.6f}, ui={ui_improvement:.6f}")
-            
+
             # Проверка stability_mode
             model_stability = model_result.get("stability_mode", "")
             ui_stability = ui_values.get("stability", "")
+            logic_stability = model_result.get("elasticity", {}).get("protective_logic", {}).get("stability_mode", model_stability)
             if model_stability != ui_stability:
                 errors.append(f"Stability mismatch: model={model_stability}, ui={ui_stability}")
-            
+            if model_stability != logic_stability:
+                errors.append(f"Stability mismatch: model={model_stability}, protective_logic={logic_stability}")
+
             # Проверка protective_mode
             model_protective = model_result.get("protective_mode", "")
             ui_protective = ui_values.get("protective", "")
             if model_protective != ui_protective:
                 errors.append(f"Protective mode mismatch: model={model_protective}, ui={ui_protective}")
-            
+
             # Проверка elasticity_med (включая None значения)
-            model_elasticity = model_result.get("elasticity", {}).get("elasticity_med", 0)
+            elasticity_info = model_result.get("elasticity", {})
+            model_elasticity = elasticity_info.get("elasticity_med", 0)
             ui_elasticity = ui_values.get("elasticity", 0)
-            
+            beta_median = elasticity_info.get("beta_median", model_elasticity)
+
             # Special case: оба None - это OK
             if model_elasticity is None and ui_elasticity is None:
                 pass  # Несогласованности нет
@@ -709,13 +732,34 @@ def main():
                 errors.append(f"Elasticity mismatch: model={model_elasticity}, ui={ui_elasticity}")
             elif abs(model_elasticity - ui_elasticity) > 1e-6:
                 errors.append(f"Elasticity mismatch: model={model_elasticity:.6f}, ui={ui_elasticity:.6f}")
-            
+
+            if model_elasticity is None and beta_median is not None:
+                errors.append(f"Elasticity mismatch: elasticity_med={model_elasticity}, beta_median={beta_median}")
+            elif model_elasticity is not None and beta_median is None:
+                errors.append(f"Elasticity mismatch: elasticity_med={model_elasticity}, beta_median={beta_median}")
+            elif model_elasticity is not None and abs(model_elasticity - beta_median) > 1e-6:
+                errors.append(f"Elasticity mismatch: elasticity_med={model_elasticity:.6f}, beta_median={beta_median:.6f}")
+
             # Проверка monotonicity_flag
             model_monotonicity = model_result.get("monotonicity_flag", "")
             ui_monotonicity = ui_values.get("monotonicity", "")
             if model_monotonicity != ui_monotonicity:
                 errors.append(f"Monotonicity mismatch: model={model_monotonicity}, ui={ui_monotonicity}")
-            
+
+            # Проверка валидных точек локальной эластичности
+            e_grid = elasticity_info.get("e_grid", []) or []
+            e_stats = elasticity_info.get("e_stats", {})
+            valid_from_grid = sum(1 for e in e_grid if e is not None and not pd.isna(e))
+            valid_reported = int(e_stats.get("valid_points", 0))
+            total_reported = int(e_stats.get("total_points", 0))
+            excluded_reported = int(e_stats.get("excluded_invalid_points", 0))
+            if valid_from_grid != valid_reported:
+                errors.append(f"Valid points mismatch: e_grid={valid_from_grid}, e_stats={valid_reported}")
+            if total_reported != valid_reported + excluded_reported:
+                errors.append(
+                    f"Point accounting mismatch: total={total_reported}, valid={valid_reported}, excluded={excluded_reported}"
+                )
+
             return errors
         
         # Извлекаем данные из единого результата (ТЗ 6.1)
@@ -908,6 +952,12 @@ def main():
                                 st.warning("⚠️ Стандартное отклонение равно 0 (возможно, идеальная степенная функция)")
                     
                     st.write(f"**Длина e_grid:** {e_stats.get('len', 0)} точек")
+                    st.write(
+                        f"**Доля нулевых локальных эластичностей:** {e_stats.get('zero_share', 0.0):.1%}"
+                    )
+                    st.write(
+                        f"**Исключено невалидных точек:** {e_stats.get('excluded_invalid_points', 0)}"
+                    )
                 else:
                     st.warning("⚠ Недостаточно данных для расчета локальной эластичности")
                 
@@ -1033,11 +1083,11 @@ def main():
             profit_last = (q_last * margin_last) - total_ad_spend
             profitability_last = (margin_last / last_p_before) * 100
             
-            is_boundary = best_info.get("is_boundary", False)
+            is_boundary_search = best_info.get("is_boundary_search", best_info.get("is_boundary", False))
+            is_boundary_history = best_info.get("is_boundary_history", False)
             
             # Логика защитных режимов и gating по improvement
             protective = model_result.get("protective_mode")
-            is_boundary = best_info.get("is_boundary", False)
             
             # Получаем значения эластичности для проверок
             e_med = e_info.get("elasticity_med", 0.0)
@@ -1069,10 +1119,10 @@ def main():
                 # Приоритет 3: conservative режим (только при improvement >= 10%)
                 show_scenario_only = False
                 st.warning("⚠️ **Консервативный режим:** модель показывает умеренную нестабильность. Оптимум ограничен, рекомендуем дополнительно оценить сценарии.")
-            elif is_boundary and (model_result.get("stability_mode") in ["S2", "S3"] or e_iqr > 0.4):
-                # Приоритет 4: граничное решение
+            elif is_boundary_search and (model_result.get("stability_mode") in ["S2", "S3"] or e_iqr > 0.4):
+                # Приоритет 4: граничное решение по поисковой сетке
                 show_scenario_only = False
-                st.warning("⚠️ **Граничное решение:** Оптимальная цена находится на границе исторического диапазона. Реальный максимум прибыли может лежать за пределами наблюденных цен.")
+                st.warning("⚠️ **Граничное решение по сетке:** оптимальная цена находится на краю поискового диапазона. Реальный максимум прибыли может лежать вне перебираемого интервала.")
             else:
                 # Приоритет 5: стандартный режим (только при improvement >= 10%)
                 show_scenario_only = False
@@ -1160,8 +1210,21 @@ def main():
                 st.write(f"💰 Чистая маржа с единицы: **{margin_opt:.2f} ₽**")
                 
                 # Проверка граничного решения (по ТЗ)
-                if is_boundary:
-                    st.warning("⚠️ **Оптимальная цена находится на границе исторического диапазона.** Реальный максимум прибыли может лежать за пределами наблюдаемых цен.")
+                if is_boundary_search:
+                    st.warning("⚠️ **Оптимальная цена на границе поисковой сетки.** Реальный максимум прибыли может лежать за пределами перебираемого диапазона.")
+
+                if is_boundary_history:
+                    st.warning("⚠️ **Оптимальная цена у границы исторического диапазона.** Повышен риск смещения оптимума за пределы наблюдавшихся цен.")
+
+                boundary_meta = best_info.get("boundary_meta", {})
+                if boundary_meta:
+                    with st.expander("🔎 Диагностика boundary-флагов"):
+                        st.json(boundary_meta)
+
+                if is_boundary_search:
+                    st.info("💡 Рекомендация: расширьте диапазон перебора цен или уменьшите шаг сетки, чтобы проверить максимум вне текущего search-range.")
+                if is_boundary_history:
+                    st.info("💡 Рекомендация: подтвердите решение сценарным анализом/AB-тестом, так как оптимум близок к краю исторических наблюдений.")
 
                 # Асимметричная проверка экстраполяции (по ТЗ)
                 tol = 0.02
