@@ -329,8 +329,6 @@ def main():
                         storage=storage,
                         hist_min=sku_df["price_after_spp"].min(),
                         hist_max=sku_df["price_after_spp"].max(),
-                        hist_min_before=sku_df["price_before_spp"].min(),
-                        hist_max_before=sku_df["price_before_spp"].max(),
                         sku_df=sku_df  # Передаем sku_df для расчета режимов и текущей прибыли
                     )
                     print("=== UI DEBUG: optimize_price completed successfully ===")
