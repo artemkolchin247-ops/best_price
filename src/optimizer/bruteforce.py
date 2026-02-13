@@ -3,27 +3,30 @@
 Iterates prices in range, predicts sales via provided forecaster, computes
 unit economics and returns table with results and best price by profit.
 """
-print("DEBUG: bruteforce.py module loading...")
+import logging
+
+logger = logging.getLogger(__name__)
+logger.debug("bruteforce.py module loading...")
 
 from typing import Dict, Any, Tuple, Iterable, Optional
-print("DEBUG: typing import successful")
+logger.debug("typing import successful")
 
 import numpy as np
-print("DEBUG: numpy import successful")
+logger.debug("numpy import successful")
 
 import pandas as pd
-print("DEBUG: pandas import successful")
+logger.debug("pandas import successful")
 
 try:
     from src.models.sales_forecast import SalesForecaster
-    print("DEBUG: SalesForecaster import successful")
+    logger.debug("SalesForecaster import successful")
 except ImportError as e:
-    print(f"ERROR: Cannot import SalesForecaster: {e}")
+    logger.error("Cannot import SalesForecaster: %s", e)
     raise
 
 
 def optimize_price(
-    forecaster: SalesForecaster,
+    forecaster,  # Убрали жесткую типизацию
     base_features: Dict[str, Any],
     price_min: float,
     price_max: float,
@@ -44,7 +47,7 @@ def optimize_price(
     """Brute-force search best price.
 
     Args:
-        forecaster: trained SalesForecaster (fit called).
+        forecaster: trained forecaster with predict method (fit called).
         base_features: dict of additional features (category medians etc.).
         price_min/price_max/step: range for price_before_spp.
         commission_rate, vat_rate, spp: market params (fractions).
@@ -54,49 +57,75 @@ def optimize_price(
         sku_df: DataFrame with historical data for additional calculations.
         **kwargs: дополнительные параметры для совместимости
     """
-    print(f"DEBUG: optimize_price called with kwargs: {kwargs}")
+    logger.debug("optimize_price called with kwargs: %s", kwargs)
     
-    # Валидация входных параметров
-    print(f"DEBUG: optimize_price called with forecaster type: {type(forecaster)}")
-    print(f"DEBUG: base_features type: {type(base_features)}")
-    print(f"DEBUG: sku_df type: {type(sku_df)}")
-    print(f"DEBUG: sku_df is None: {sku_df is None}")
+    # Валидация параметров сетки цен
+    if price_min > price_max:
+        raise ValueError(f"price_min ({price_min}) must be <= price_max ({price_max})")
+    if step <= 0:
+        raise ValueError(f"step ({step}) must be > 0")
+    
+    # Проверка что сетка не пустая
+    price_points = np.arange(price_min, price_max + step, step)
+    if len(price_points) == 0:
+        raise ValueError(f"Price grid is empty: price_min={price_min}, price_max={price_max}, step={step}")
+    
+    logger.info("Price grid: %d points from %.2f to %.2f with step %.2f", 
+                len(price_points), price_min, price_max, step)
+    
+    # Интерфейсные проверки forecaster
+    required_methods = ['predict', 'get_info']
+    missing_methods = [method for method in required_methods if not hasattr(forecaster, method)]
+    if missing_methods:
+        raise ValueError(f"Forecaster missing required methods: {missing_methods}")
+    
+    # Проверка что forecaster обучен
+    forecaster_info = getattr(forecaster, 'get_info', lambda: {})()
+    if not forecaster_info:
+        logger.warning("Forecaster get_info() returned empty or missing")
+    
+    logger.debug("Forecaster validation passed")
+    logger.debug("optimize_price called with forecaster type: %s", type(forecaster))
+    logger.debug("base_features type: %s", type(base_features))
+    logger.debug("sku_df type: %s", type(sku_df))
+    logger.debug("sku_df is None: %s", sku_df is None)
     
     if sku_df is not None:
-        print(f"DEBUG: sku_df empty: {sku_df.empty}")
-        print(f"DEBUG: sku_df columns: {list(sku_df.columns) if hasattr(sku_df, 'columns') else 'No columns attr'}")
+        logger.debug("sku_df empty: %s", sku_df.empty)
+        logger.debug("sku_df columns: %s", list(sku_df.columns) if hasattr(sku_df, 'columns') else 'No columns attr')
     
-    if not isinstance(forecaster, SalesForecaster):
-        raise TypeError(f"forecaster must be SalesForecaster, got {type(forecaster)}")
-    
+    # Валидация типов
     if not isinstance(base_features, dict):
         raise TypeError(f"base_features must be dict, got {type(base_features)}")
     
     if sku_df is not None and not isinstance(sku_df, pd.DataFrame):
         raise TypeError(f"sku_df must be pandas.DataFrame or None, got {type(sku_df)}")
     
-    # Проверка что forecaster обучен
-    if forecaster.best_model_name is None:
-        raise RuntimeError("Forecaster must be trained before optimization")
+    # Проверка что forecaster обучен (интерфейсная проверка)
+    best_model_name = getattr(forecaster, 'best_model_name', None)
+    if best_model_name is None:
+        logger.warning("Forecaster best_model_name is None - may not be trained")
     
-    print("DEBUG: Basic validation passed")
+    logger.debug("Basic validation passed")
     
     # Получаем информацию о модели
     try:
         f_info = forecaster.get_info()
-        print(f"DEBUG: Got forecaster info: {type(f_info)}")
+        logger.debug("Got forecaster info: %s", type(f_info))
     except Exception as e:
-        print(f"DEBUG: Error getting forecaster info: {e}")
+        logger.error("Error getting forecaster info: %s", e)
         raise
     
-    stability = f_info.get("stability_mode", "S1")
-    mono_flag = f_info.get("monotonicity_flag", "monotone")
-    protective = f_info.get("protective_mode")
+    # Нормализованные внутренние имена флагов
+    stability_mode = f_info.get("stability_mode", "S1")
+    monotonicity_flag = f_info.get("monotonicity_flag", "monotone")
+    protective_mode = f_info.get("protective_mode")
     
-    print(f"DEBUG: stability={stability}, mono_flag={mono_flag}, protective={protective}")
+    logger.info("Model flags - stability: %s, monotonicity: %s, protective: %s", 
+                stability_mode, monotonicity_flag, protective_mode)
     
     # Режим оптимизации по умолчанию
-    regime = stability
+    regime = stability_mode
     penalty_enabled = False
     
     # Определяем текущую цену ПОСЛЕ СПП и текущую ПРИБЫЛЬ для расчетов
@@ -106,58 +135,60 @@ def optimize_price(
     # Квантили истории для режимов (по price_after_spp)
     p5, p10, p90, p95 = None, None, None, None
     
-    print("DEBUG: Starting sku_df processing")
+    logger.debug("Starting sku_df processing")
     
     if sku_df is not None and not sku_df.empty and "price_after_spp" in sku_df.columns:
         try:
-            print("DEBUG: Processing sku_df for current price")
+            logger.debug("Processing sku_df for current price")
             last_row_sku = sku_df.sort_values("date").iloc[-1]
-            print(f"DEBUG: Got last row, type: {type(last_row_sku)}")
+            logger.debug("Got last row, type: %s", type(last_row_sku))
             
             current_p_after = float(last_row_sku["price_after_spp"])
-            print(f"DEBUG: Got current_p_after: {current_p_after}")
+            logger.debug("Got current_p_after: %s", current_p_after)
             
             # Считаем текущую прибыль (прогнозную) по ТЗ: UnitMargin * Orders
             p_last_before = float(last_row_sku["price_before_spp"])
-            print(f"DEBUG: Got p_last_before: {p_last_before}")
+            logger.debug("Got p_last_before: %s", p_last_before)
             
             s_val = spp
             p_after_last = p_last_before * (1.0 - s_val)
             comm_last = p_last_before * commission_rate
             vat_last = p_after_last * vat_rate
             m_last = p_last_before - comm_last - vat_last - cogs - logistics - storage
-            print(f"DEBUG: Calculated margin: {m_last}")
+            logger.debug("Calculated margin: %s", m_last)
             
             # Прогноз для текущей цены
-            print("DEBUG: Calling predict_sales")
+            logger.debug("Calling predict_sales")
             q_last = forecaster.predict_sales(current_p_after, base_features)
-            print(f"DEBUG: Got q_last: {q_last}")
+            logger.debug("Got q_last: %s", q_last)
             
             current_profit_daily = m_last * q_last
-            print(f"DEBUG: Calculated current_profit_daily: {current_profit_daily}")
+            logger.debug("Calculated current_profit_daily: %s", current_profit_daily)
             
             # Расчет квантилей
-            print("DEBUG: Calculating quantiles")
+            logger.debug("Calculating quantiles")
             p_after_hist = sku_df["price_after_spp"]
             p5, p10, p90, p95 = p_after_hist.quantile([0.05, 0.1, 0.9, 0.95])
-            print(f"DEBUG: Got quantiles: p5={p5}, p10={p10}, p90={p90}, p95={p95}")
+            logger.debug("Got quantiles: p5=%s, p10=%s, p90=%s, p95=%s", p5, p10, p90, p95)
             
         except (KeyError, IndexError, ValueError, TypeError) as e:
-            print(f"Warning: Error processing sku_df: {e}")
+            logger.warning("Error processing sku_df: %s", e)
             # Устанавливаем значения по умолчанию
             current_p_after = None
             current_profit_daily = None
     else:
-        print("DEBUG: sku_df is None, empty, or missing price_after_spp column")
+        logger.debug("sku_df is None, empty, or missing price_after_spp column")
 
     # --- Определение режима на основе стабильности и монотонности ---
     reg_min_a, reg_max_a = 0, float("inf")
     
-    if protective == "S1":
+    if protective_mode == "S1":
         regime = "Защитный S1 (Критически мало данных)"
-    elif stability == "S3":
+        logger.info("Using protective S1 regime - critically low data")
+    elif stability_mode == "S3":
         regime = "S3 (Нестабильный)"
         penalty_enabled = True
+        logger.info("Using S3 regime - unstable model with penalty")
         # Ограничение диапазона: intersection([current * 0.8; current * 1.2], [p10; p90])
         low_a, high_a = 0, float("inf")
         if current_p_after is not None:
@@ -166,13 +197,15 @@ def optimize_price(
         if p10 is not None: low_a = max(low_a, p10)
         if p90 is not None: high_a = min(high_a, p90)
         reg_min_a, reg_max_a = low_a, high_a
-    elif stability == "S2":
+    elif stability_mode == "S2":
         regime = "S2 (Умеренный)"
+        logger.info("Using S2 regime - moderate stability")
         # Оптимизация внутри [p10; p90]
         if p10 is not None: reg_min_a = max(reg_min_a, p10)
         if p90 is not None: reg_max_a = min(reg_max_a, p90)
     else:  # S1 stability - Stable
         regime = "S1 (Стабильный)"
+        logger.info("Using S1 regime - stable model")
         # Глобальная оптимизация внутри [p5; p95]
         if p5 is not None: reg_min_a = max(reg_min_a, p5)
         if p95 is not None: reg_max_a = min(reg_max_a, p95)
@@ -206,18 +239,22 @@ def optimize_price(
     
     # Калибровка всей кривой разом при немонотонности (ТЗ 8)
     # Используем ту же логику, что и в _calculate_numerical_elasticity
-    if mono_flag == "non_monotone":
+    if monotonicity_flag == "non_monotone":
+        logger.debug("Applying non-monotone calibration")
         calibrated_preds = forecaster.calibrate_curve(np.array(customer_prices), np.array(raw_preds))
     else:
+        logger.debug("Using monotone predictions without calibration")
         calibrated_preds = np.array(raw_preds)
     
-    if protective == "S1" and sku_df is not None and not sku_df.empty and "orders" in sku_df.columns:
+    if protective_mode == "S1" and sku_df is not None and not sku_df.empty and "orders" in sku_df.columns:
         # Перетираем калиброванные прогнозы константой для режима S1
+        logger.info("Applying S1 protective mode - using constant predictions")
         try:
             last_orders = sku_df.sort_values("date").tail(14)["orders"].median()
             calibrated_preds = np.full_like(calibrated_preds, last_orders)
+            logger.debug("S1 mode: using median orders from last 14 days: %s", last_orders)
         except (KeyError, IndexError, ValueError) as e:
-            print(f"Warning: Error processing S1 regime: {e}")
+            logger.warning("Error processing S1 regime: %s", e)
             # Оставляем calibrated_preds как есть
 
     for i, p in enumerate(prices):
@@ -273,22 +310,50 @@ def optimize_price(
 
     best_idx = df_res["profit"].idxmax()
     best_row = df_res.loc[best_idx]
+    best_price = float(best_row["price_before_spp"])
+    best_profit = float(best_row["profit"])
 
+    # Boundary detection и логирование причин выбора цены
     is_boundary_search = bool(best_idx == 0 or best_idx == len(df_res) - 1)
+    
+    if is_boundary_search:
+        if best_idx == 0:
+            boundary_reason = "Optimum at minimum price boundary - profit decreases with higher prices"
+        else:
+            boundary_reason = "Optimum at maximum price boundary - profit decreases with lower prices"
+        logger.warning("Boundary search detected: %s", boundary_reason)
+    else:
+        logger.info("Internal optimum found - price is within search range boundaries")
 
     # Двухуровневый boundary-флаг: 2) близость к историческим границам
     is_boundary_history = False
+    boundary_history_reason = None
     tol = float(step)
     if hist_min_before_effective is not None and hist_max_before_effective is not None:
         hist_span = float(hist_max_before_effective - hist_min_before_effective)
         if hist_span > 0:
             tol = max(float(step), hist_span * 0.02)
 
-        p_opt_before = float(best_row["price_before_spp"])
+        p_opt_before = best_price
         is_boundary_history = (
             abs(p_opt_before - float(hist_min_before_effective)) <= tol
             or abs(p_opt_before - float(hist_max_before_effective)) <= tol
         )
+        
+        if is_boundary_history:
+            if abs(p_opt_before - float(hist_min_before_effective)) <= tol:
+                boundary_history_reason = f"Optimum near historical minimum ({hist_min_before_effective:.2f})"
+            else:
+                boundary_history_reason = f"Optimum near historical maximum ({hist_max_before_effective:.2f})"
+            logger.warning("Historical boundary detected: %s", boundary_history_reason)
+
+    # Логирование итогового выбора цены
+    logger.info("Price optimization completed:")
+    logger.info("  - Best price: %.2f (before SPP)", best_price)
+    logger.info("  - Best profit: %.2f", best_profit)
+    logger.info("  - Boundary search: %s", is_boundary_search)
+    logger.info("  - Boundary history: %s", is_boundary_history)
+    logger.info("  - Regime: %s", regime)
 
     best_info = {
         "best_price_before_spp": best_row["price_before_spp"],
