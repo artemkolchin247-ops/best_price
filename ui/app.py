@@ -447,74 +447,10 @@ def main():
         risks = create_risks_summary(best_info, model_result)
         display_risks(risks)
         
-        # --- Визуализация результатов ---
-
-
         # Historical context
         p_min_hist = sku_df["price_before_spp"].min()
         p_max_hist = sku_df["price_before_spp"].max()
         st.write(f"Исторический диапазон цен (до СПП): **{p_min_hist:.0f} — {p_max_hist:.0f} RUB**")
-
-        # --- Отладочная информация с уровнями ---
-        debug_level = get_debug_level()
-        
-        if debug_level != "off":
-            # Получаем данные модели
-            if "results" in st.session_state and st.session_state.get("current_sku") == selected_sku:
-                sf = st.session_state["sf"]
-                model_result = sf.get_model_result()
-                
-                if model_result:
-                    # Создаем debug данные
-                    debug_summary = create_debug_summary(model_result, sf)
-                    debug_full = create_debug_full(model_result, sf)
-                    
-                    # Заголовок блока
-                    if debug_level == "summary":
-                        title = "📋 Краткая диагностика"
-                    else:
-                        title = "🔍 Подробная диагностика"
-                    
-                    with st.expander(title):
-                        if debug_level == "summary":
-                            # Summary режим
-                            st.markdown("### 📋 Debug Summary")
-                            if debug_summary:
-                                st.code(debug_summary["summary"], language="text")
-                                
-                                # Дополнительная информация в виде метрик
-                                col1, col2, col3 = st.columns(3)
-                                with col1:
-                                    st.metric("Статус", debug_summary["status"])
-                                    st.metric("Run ID", debug_summary["run_id"][:8] + "...")
-                                with col2:
-                                    st.metric("Data State", debug_summary["data_state"])
-                                    st.metric("Model", debug_summary["model"])
-                                with col3:
-                                    st.metric("Improvement", debug_summary["improvement"])
-                                    st.metric("Elasticity", debug_summary["elasticity"])
-                                
-                                # Ошибка если есть
-                                if debug_summary["error_code"]:
-                                    st.error(f"**{debug_summary['error_code']}:** {debug_summary['error_message']}")
-                            else:
-                                st.warning("Debug summary недоступен")
-                        
-                        elif debug_level == "full":
-                            # Full режим
-                            st.markdown("### 📋 Debug Summary")
-                            if debug_summary:
-                                st.code(debug_summary["summary"], language="text")
-                            
-                            st.markdown("### 🔍 Полная отладочная информация")
-                            if debug_full:
-                                st.json(debug_full)
-                            else:
-                                st.warning("Полная отладочная информация недоступна")
-                else:
-                    st.warning("Модель не обучена - отладочная информация недоступна")
-            else:
-                st.info("Оптимизация еще не запускалась - отладочная информация недоступна")
 
         st.subheader("1. Анализ спроса и эластичности")
         
