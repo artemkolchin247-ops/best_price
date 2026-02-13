@@ -58,20 +58,30 @@ def optimize_price(
     # Квантили истории для режимов (по price_after_spp)
     p5, p10, p90, p95 = None, None, None, None
     
-    if sku_df is not None and not sku_df.empty:
-        last_row_sku = sku_df.sort_values("date").iloc[-1]
-        current_p_after = float(last_row_sku["price_after_spp"])
-        # Считаем текущую прибыль (прогнозную) по ТЗ: UnitMargin * Orders
-        p_last_before = float(last_row_sku["price_before_spp"])
-        comm_last = p_last_before * commission_rate
-        vat_last = current_p_after * vat_rate
-        m_last = p_last_before - comm_last - vat_last - cogs - logistics - storage
-        q_last = float(forecaster.predict_sales(current_p_after, base_features))
-        current_profit_daily = m_last * q_last
-        
-        # Расчет квантилей
-        p_after_hist = sku_df["price_after_spp"]
-        p5, p10, p90, p95 = p_after_hist.quantile([0.05, 0.1, 0.9, 0.95])
+    if sku_df is not None and not sku_df.empty and "price_after_spp" in sku_df.columns:
+        try:
+            last_row_sku = sku_df.sort_values("date").iloc[-1]
+            current_p_after = float(last_row_sku["price_after_spp"])
+            # Считаем текущую прибыль (прогнозную) по ТЗ: UnitMargin * Orders
+            p_last_before = float(last_row_sku["price_before_spp"])
+            s_val = spp
+            p_after_last = p_last_before * (1.0 - s_val)
+            comm_last = p_last_before * commission_rate
+            vat_last = p_after_last * vat_rate
+            m_last = p_last_before - comm_last - vat_last - cogs - logistics - storage
+            
+            # Прогноз для текущей цены
+            q_last = forecaster.predict_sales(current_p_after, base_features)
+            current_profit_daily = m_last * q_last
+            
+            # Расчет квантилей
+            p_after_hist = sku_df["price_after_spp"]
+            p5, p10, p90, p95 = p_after_hist.quantile([0.05, 0.1, 0.9, 0.95])
+        except (KeyError, IndexError, ValueError, TypeError) as e:
+            print(f"Warning: Error processing sku_df: {e}")
+            # Устанавливаем значения по умолчанию
+            current_p_after = None
+            current_profit_daily = None
 
     # --- Определение режима на основе стабильности и монотонности ---
     reg_min_a, reg_max_a = 0, float("inf")
@@ -134,10 +144,14 @@ def optimize_price(
     else:
         calibrated_preds = np.array(raw_preds)
     
-    if protective == "S1" and sku_df is not None:
+    if protective == "S1" and sku_df is not None and not sku_df.empty and "orders" in sku_df.columns:
         # Перетираем калиброванные прогнозы константой для режима S1
-        last_orders = sku_df.sort_values("date").tail(14)["orders"].median()
-        calibrated_preds = np.full_like(calibrated_preds, last_orders)
+        try:
+            last_orders = sku_df.sort_values("date").tail(14)["orders"].median()
+            calibrated_preds = np.full_like(calibrated_preds, last_orders)
+        except (KeyError, IndexError, ValueError) as e:
+            print(f"Warning: Error processing S1 regime: {e}")
+            # Оставляем calibrated_preds как есть
 
     for i, p in enumerate(prices):
         p_after = customer_prices[i]
