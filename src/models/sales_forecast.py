@@ -853,7 +853,19 @@ class SalesForecaster:
                 "q_grid_raw": q_grid_raw.tolist(),
                 "q_grid_calibrated": preds_calibrated.tolist() if mono_v_raw > 0.2 else None,
                 "r_squared": r2,
-                "e_stats": {"min": 0, "median": 0, "max": 0, "std": 0, "len": 0},
+                "e_stats": {
+                    "min": 0,
+                    "median": 0,
+                    "max": 0,
+                    "std": 0,
+                    "len": 0,
+                    "valid_points": 0,
+                    "total_points": max(len(p_grid) - 2, 0),
+                    "excluded_invalid_points": 0,
+                    "zero_share": 0.0
+                },
+                "local_elasticity_zero_share": 0.0,
+                "local_elasticity_invalid_points": 0,
                 "global_regression": {
                     "global_elasticity": e_global,
                     "r_squared": r2,
@@ -867,22 +879,36 @@ class SalesForecaster:
         q_clipped = np.clip(q_grid_used, eps, None)  # Используем q_grid_used (ТЗ 2.2)
         
         # Локальная эластичность по центральной разности для внутренних точек
+        e_grid_with_nan = [np.nan] * len(p_grid)
+        invalid_local_points = 0
         for i in range(1, len(p_grid) - 1):
             ln_q_i_minus_1 = np.log(q_clipped[i-1])
             ln_q_i_plus_1 = np.log(q_clipped[i+1])
             ln_p_i_minus_1 = np.log(p_grid[i-1])
             ln_p_i_plus_1 = np.log(p_grid[i+1])
-            
+
             # Проверка деления на ноль
             denominator = ln_p_i_plus_1 - ln_p_i_minus_1
-            if abs(denominator) > 1e-10:
+            values_are_valid = (
+                np.isfinite(ln_q_i_minus_1)
+                and np.isfinite(ln_q_i_plus_1)
+                and np.isfinite(ln_p_i_minus_1)
+                and np.isfinite(ln_p_i_plus_1)
+            )
+
+            if abs(denominator) > 1e-10 and values_are_valid:
                 e_i = (ln_q_i_plus_1 - ln_q_i_minus_1) / denominator  # Формула из ТЗ 2.1
-                e_grid_local.append(e_i)  # Не округляем (ТЗ 2.2)
+                if np.isfinite(e_i):
+                    e_grid_local.append(float(e_i))  # Не округляем (ТЗ 2.2)
+                    e_grid_with_nan[i] = float(e_i)
+                else:
+                    invalid_local_points += 1
             else:
-                e_grid_local.append(0.0)
-        
-        # e_grid содержит только внутренние точки (края не считаем)
-        e_grid_with_nan = [np.nan] + e_grid_local + [np.nan]  # Для согласованности длины
+                invalid_local_points += 1
+
+        local_total_points = max(len(p_grid) - 2, 0)
+        local_zero_count = int(sum(abs(e) <= 1e-12 for e in e_grid_local))
+        local_zero_share = (local_zero_count / len(e_grid_local)) if e_grid_local else 0.0
         
         # Статистика для отладки
         if len(e_grid_local) > 0:
@@ -893,13 +919,17 @@ class SalesForecaster:
                 "std": float(np.std(e_grid_local)),
                 "len": len(e_grid_local),
                 "valid_points": len(e_grid_local),  # Для UI
-                "total_points": len(e_grid_local)  # Для UI
+                "total_points": local_total_points,  # Для UI
+                "excluded_invalid_points": int(invalid_local_points),
+                "zero_share": float(local_zero_share)
             }
         else:
             e_stats = {
                 "min": 0, "median": 0, "max": 0, "std": 0, "len": 0,
                 "valid_points": 0,  # Для UI
-                "total_points": 0  # Для UI
+                "total_points": local_total_points,  # Для UI
+                "excluded_invalid_points": int(invalid_local_points),
+                "zero_share": 0.0
             }
         # IQR считаем через бутстрап по точкам сетки для всех моделей
         bootstrap_elasticities = []
@@ -938,6 +968,8 @@ class SalesForecaster:
             "q_grid_calibrated": preds_calibrated.tolist() if mono_v_raw > 0.2 else None,  # Калиброванная кривая
             "r_squared": r2,  # Качество регрессии
             "e_stats": e_stats,  # Статистика локальной эластичности
+            "local_elasticity_zero_share": float(local_zero_share),
+            "local_elasticity_invalid_points": int(invalid_local_points),
             "global_regression": {  # Информация о глобальной регрессии
                 "global_elasticity": e_global,
                 "r_squared": r2,
@@ -1131,7 +1163,7 @@ class SalesForecaster:
                             self.elasticity_info[f"{profile_name}_{key}"] = None
             
             # Основная эластичность - по med профилю
-            if "med" in ad_profiles and ad_profiles.get("available_features"):
+            if ad_profiles is not None and "med" in ad_profiles and ad_profiles.get("available_features"):
                 med_profile = {k: v for k, v in ad_profiles["med"].items() 
                               if k in ad_profiles["available_features"]}
                 med_e = self._calculate_numerical_elasticity(df, ad_profile=med_profile)
