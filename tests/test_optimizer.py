@@ -34,6 +34,8 @@ def test_optimize_price_basic():
 
     # basic asserts
     assert "price_before" in results.columns
+    assert "price_before_spp" in results.columns
     assert "predicted_sales" in results.columns
     assert "profit" in results.columns
-    assert best["best_price_before"] in results["price_before"].values
+    assert (results["price_before"] == results["price_before_spp"]).all()
+    assert best["best_price_before"] in results["price_before_spp"].values

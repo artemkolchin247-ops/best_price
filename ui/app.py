@@ -2,6 +2,7 @@ import io
 from typing import List
 import os
 import sys
+import logging
 
 # ensure project root is on sys.path so `from src...` imports work when
 # Streamlit runs the app from the `ui/` folder
@@ -14,8 +15,10 @@ import pandas as pd
 import plotly.express as px
 from src.models.sales_forecast import SalesForecaster
 from src.optimizer.bruteforce import optimize_price
-from src.ingestion.excel_parser import ExcelIngestor, DEFAULT_COLUMNS
+from src.ingestion.excel_parser import ExcelIngestor, DEFAULT_COLUMNS, ValidationError
 import json
+
+logger = logging.getLogger(__name__)
 
 # --- Уровень отладки ---
 DEBUG_LEVELS = ["off", "summary", "full"]
@@ -163,12 +166,17 @@ def main():
         "Excel файлы (несколько)", accept_multiple_files=True, type=["xlsx", "xls"]
     )
 
-    ing = ExcelIngestor()
+    ing = ExcelIngestor(strict=False)
     df = None
     report = None
     if uploaded:
         file_objs = read_uploaded_files(uploaded)
-        df, report = ing.load_files(file_objs)
+        try:
+            df, report = ing.load_files(file_objs)
+        except ValidationError as e:
+            st.sidebar.error(f"Ошибка валидации данных: {e}")
+            return
+
         if report.get("errors"):
             st.sidebar.error("; ".join(report.get("errors")))
         if report.get("warnings"):
@@ -244,16 +252,16 @@ def main():
             )
             try:
                 sf.fit(sku_df, n_splits=3)
-            except Exception:
+            except (ValueError, RuntimeError):
                 # fallback: fit without time col
                 sf.fit(sku_df, n_splits=2)
 
             # run optimizer
             try:
                 # Debug логирование перед оптимизацией (ТЗ)
-                print("DEBUG model_name:", sf.best_model_name)
-                print("DEBUG data_state:", getattr(sf, 'data_state', 'UNKNOWN'))
-                print("DEBUG fit_return:", getattr(sf, '_fit_return_value', 'UNKNOWN'))
+                logger.debug("model_name: %s", sf.best_model_name)
+                logger.debug("data_state: %s", getattr(sf, "data_state", "UNKNOWN"))
+                logger.debug("fit_return: %s", getattr(sf, "_fit_return_value", "UNKNOWN"))
                 
                 results, best_info = optimize_price(
                     forecaster=sf,
@@ -316,7 +324,7 @@ def main():
                     except RuntimeError as e:
                         st.error(f"🚫 **Модель не обучена:** {str(e)}")
                         return
-                    except Exception:
+                    except (ValueError, TypeError):
                         st.warning("Модель не обучена: неизвестная ошибка")
                         return
             else:
@@ -1206,9 +1214,9 @@ def main():
 
         st.subheader("Диагностика: Actual vs Predicted")
         # Debug логирование перед диагностикой (ТЗ)
-        print("DEBUG model_name before predict_on_df:", sf.best_model_name)
-        print("DEBUG data_state before predict_on_df:", getattr(sf, 'data_state', 'UNKNOWN'))
-        print("DEBUG fit_return before predict_on_df:", getattr(sf, '_fit_return_value', 'UNKNOWN'))
+        logger.debug("model_name before predict_on_df: %s", sf.best_model_name)
+        logger.debug("data_state before predict_on_df: %s", getattr(sf, "data_state", "UNKNOWN"))
+        logger.debug("fit_return before predict_on_df: %s", getattr(sf, "_fit_return_value", "UNKNOWN"))
         
         diag_df = sku_df.copy()
         diag_df["predicted_orders"] = sf.predict_on_df(diag_df)
