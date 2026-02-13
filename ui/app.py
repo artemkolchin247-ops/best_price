@@ -3,6 +3,7 @@ from typing import List
 import os
 import sys
 import logging
+import inspect  # Добавлен для динамической фильтрации параметров
 
 # ensure project root is on sys.path so `from src...` imports work when
 # Streamlit runs the app from the `ui/` folder
@@ -315,24 +316,39 @@ def main():
                 
                 print("=== UI DEBUG: Calling optimize_price ===")
                 try:
-                    results, best_info = optimize_price(
-                        forecaster=sf,
-                        base_features=base_features,
-                        price_min=price_min,
-                        price_max=price_max,
-                        step=step,
-                        commission_rate=commission_pct / 100.0,
-                        vat_rate=vat_pct / 100.0,
-                        spp=spp_pct / 100.0,
-                        cogs=cogs,
-                        logistics=logistics,
-                        storage=storage,
-                        hist_min=sku_df["price_after_spp"].min(),
-                        hist_max=sku_df["price_after_spp"].max(),
-                        hist_min_before=sku_df["price_before_spp"].min(),
-                        hist_max_before=sku_df["price_before_spp"].max(),
-                        sku_df=sku_df  # Передаем sku_df для расчета режимов и текущей прибыли
-                    )
+                    optimize_kwargs = {
+                        "forecaster": sf,
+                        "base_features": base_features,
+                        "price_min": price_min,
+                        "price_max": price_max,
+                        "step": step,
+                        "commission_rate": commission_pct / 100.0,
+                        "vat_rate": vat_pct / 100.0,
+                        "spp": spp_pct / 100.0,
+                        "cogs": cogs,
+                        "logistics": logistics,
+                        "storage": storage,
+                        "hist_min": sku_df["price_after_spp"].min(),
+                        "hist_max": sku_df["price_after_spp"].max(),
+                        "hist_min_before": sku_df["price_before_spp"].min(),
+                        "hist_max_before": sku_df["price_before_spp"].max(),
+                        # Передаем sku_df для расчета режимов и текущей прибыли
+                        "sku_df": sku_df,
+                    }
+
+                    # Поддержка старых версий optimize_price, где нет hist_*_before аргументов.
+                    # Это защищает UI от падения при смешанных версиях кода.
+                    supported_params = set(inspect.signature(optimize_price).parameters)
+                    filtered_kwargs = {
+                        key: value for key, value in optimize_kwargs.items() if key in supported_params
+                    }
+
+                    print(f"DEBUG: Total parameters: {len(optimize_kwargs)}")
+                    print(f"DEBUG: Supported parameters: {len(supported_params)}")
+                    print(f"DEBUG: Filtered parameters: {len(filtered_kwargs)}")
+                    print(f"DEBUG: Unsupported params: {set(optimize_kwargs.keys()) - supported_params}")
+
+                    results, best_info = optimize_price(**filtered_kwargs)
                     print("=== UI DEBUG: optimize_price completed successfully ===")
                 except Exception as e:
                     print(f"=== UI DEBUG: optimize_price failed with error ===")
