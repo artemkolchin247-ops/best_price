@@ -1368,7 +1368,7 @@ def main():
             return
             
         st.subheader("Кривая спроса (Прогноз)")
-        fig1 = px.line(results, x="price_before_spp", y="predicted_sales", markers=True, title="Зависимость продаж от цены")
+        fig1 = px.line(results, x="price_before_spp", y="predicted_sales", markers=True, title="Зависимость продаж от цены (до СПП)")
         # Add historical range vertical lines
         fig1.add_vline(x=p_min_hist, line_dash="dash", line_color="gray", annotation_text="Min Hist")
         fig1.add_vline(x=p_max_hist, line_dash="dash", line_color="gray", annotation_text="Max Hist")
