@@ -497,7 +497,7 @@ def main():
             # Детальная информация по каждому шагу
             st.markdown("#### 🔍 Детальная информация по шагам")
             for i, step in enumerate(pipeline_log["steps"]):
-                with st.expander(f"Шаг {i+1}: {step['name']} ({step['status']})"):
+                with st.expander(f"Шаг {i+1}: {step['name']} ({step['status']})", expanded=False):
                     col1, col2 = st.columns(2)
                     with col1:
                         st.metric("Строк", step["rows"])
@@ -633,24 +633,24 @@ def main():
                 st.info(f"Метрики качества не доступны из-за состояния данных: {data_state}")
             
             # 5. Техническая информация (Debug) - МАКСИМАЛЬНО ПОДРОБНО
-            st.markdown("### 🔍 Техническая информация (Debug)")
-            debug_info = {
-                "model_result": model_result,  # Единый источник данных
-                "features_used": model_result.get("features_used", []),
-                "pipeline_log": model_result.get("pipeline_log", []),  # Канонический атрибут
-                "debug_info": {
-                    "best_model_name": sf.best_model_name,
-                    "data_state": getattr(sf, 'data_state', 'UNKNOWN'),
-                    "fit_return_value": getattr(sf, '_fit_return_value', 'UNKNOWN'),
-                    "error": getattr(sf, 'error', {}),
-                    "quality_info": getattr(sf, 'quality_info', {}),
-                    "elasticity_info": getattr(sf, 'elasticity_info', {}),
-                    "performance_info": getattr(sf, 'performance_info', {}),
-                    "feature_cols": getattr(sf, 'feature_cols', []),
-                    "models": list(getattr(sf, 'models', {}).keys())
+            with st.expander("### 🔍 Техническая информация (Debug)", expanded=False):
+                debug_info = {
+                    "model_result": model_result,  # Единый источник данных
+                    "features_used": model_result.get("features_used", []),
+                    "pipeline_log": model_result.get("pipeline_log", []),  # Канонический атрибут
+                    "debug_info": {
+                        "best_model_name": sf.best_model_name,
+                        "data_state": getattr(sf, 'data_state', 'UNKNOWN'),
+                        "fit_return_value": getattr(sf, '_fit_return_value', 'UNKNOWN'),
+                        "error": getattr(sf, 'error', {}),
+                        "quality_info": getattr(sf, 'quality_info', {}),
+                        "elasticity_info": getattr(sf, 'elasticity_info', {}),
+                        "performance_info": getattr(sf, 'performance_info', {}),
+                        "feature_cols": getattr(sf, 'feature_cols', []),
+                        "models": list(getattr(sf, 'models', {}).keys())
+                    }
                 }
-            }
-            st.json(debug_info)
+                st.json(debug_info)
         
         # Historical context
         p_min_hist = sku_df["price_before_spp"].min()
