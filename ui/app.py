@@ -173,6 +173,13 @@ def read_uploaded_files(uploaded_files: List) -> List:
 
 def main():
     st.title("Best Price — оптимизация цены")
+    
+    # Принудительное обновление для Streamlit Cloud кэша
+    if "version" not in st.session_state:
+        st.session_state["version"] = "1.0.1"
+    
+    # Показываем версию для отладки
+    st.caption(f"Version: {st.session_state['version']}")
 
     st.sidebar.header("1. Загрузите данные")
     uploaded = st.sidebar.file_uploader(
@@ -440,6 +447,15 @@ def main():
         model_result = sf.get_model_result() if hasattr(sf, 'get_model_result') else {}
         
         # --- Детализация логов ---
+        
+        # Принудительное обновление session_state для Streamlit Cloud
+        if "results" in st.session_state and st.session_state.get("current_sku") == selected_sku:
+            sf = st.session_state["sf"]
+            model_result = sf.get_model_result() if hasattr(sf, 'get_model_result') else {}
+            
+            # Обновляем данные если они изменились
+            if model_result != st.session_state.get("model_result", {}):
+                st.session_state["model_result"] = model_result
         
         # 1. Структурированные логи пайплайна (ТЗ 2) - МАКСИМАЛЬНО ПОДРОБНО
         st.markdown("### 🔍 Полные логи пайплайна обработки данных")
