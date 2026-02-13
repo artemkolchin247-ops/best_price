@@ -175,8 +175,8 @@ def main():
     st.title("Best Price — оптимизация цены")
     
     # Принудительное обновление для Streamlit Cloud кэша
-    if "version" not in st.session_state or st.session_state["version"] != "1.0.9":
-        st.session_state["version"] = "1.0.9"
+    if "version" not in st.session_state or st.session_state["version"] != "1.1.0":
+        st.session_state["version"] = "1.1.0"
         # Очищаем кэш полностью
         for key in list(st.session_state.keys()):
             if key != "version":
@@ -517,8 +517,8 @@ def main():
             # Детальная информация по каждому шагу
             st.markdown("#### 🔍 Детальная информация по шагам")
             for i, step in enumerate(pipeline_log["steps"]):
-                with st.expander(f"Шаг {i+1}: {step['name']} ({step['status']})", expanded=False):
-                        col1, col2 = st.columns(2)
+                st.markdown(f"**Шаг {i+1}: {step['name']} ({step['status']})**")
+                col1, col2 = st.columns(2)
                 with col1:
                     st.metric("Строк", step["rows"])
                     st.metric("Колонки", step["cols"])
@@ -653,8 +653,8 @@ def main():
                 st.info(f"Метрики качества не доступны из-за состояния данных: {data_state}")
             
             # 5. Техническая информация (Debug) - МАКСИМАЛЬНО ПОДРОБНО
-            with st.expander("### 🔍 Техническая информация (Debug)", expanded=False):
-                debug_info = {
+            st.markdown("### 🔍 Техническая информация (Debug)")
+            debug_info = {
                     "model_result": model_result,  # Единый источник данных
                     "features_used": model_result.get("features_used", []),
                     "pipeline_log": model_result.get("pipeline_log", []),  # Канонический атрибут
@@ -669,15 +669,15 @@ def main():
                         "feature_cols": getattr(sf, 'feature_cols', []),
                         "models": list(getattr(sf, 'models', {}).keys())
                     }
-                }
-            st.json(debug_info)
+            }
+        st.json(debug_info)
         
         # Historical context
-            p_min_hist = sku_df["price_before_spp"].min()
-            p_max_hist = sku_df["price_before_spp"].max()
-            st.write(f"Исторический диапазон цен (до СПП): **{p_min_hist:.0f} — {p_max_hist:.0f} RUB**")
-        
-        st.subheader("1. Анализ спроса и эластичности")
+        p_min_hist = sku_df["price_before_spp"].min()
+        p_max_hist = sku_df["price_before_spp"].max()
+        st.write(f"Исторический диапазон цен (до СПП): **{p_min_hist:.0f} — {p_max_hist:.0f} RUB**")
+    
+    st.subheader("1. Анализ спроса и эластичности")
         
         # ⚠️ ВАЖНО: Запрещено пересчитывать метрики в UI! (ТЗ 1.2)
         # Использовать только данные из model_result
