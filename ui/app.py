@@ -290,7 +290,14 @@ def main():
                     results, best_info = optimize_price(**optimize_kwargs)
                 except TypeError as e:
                     # Backward compatibility для сред, где optimize_price еще без hist_*_before
-                    if "hist_min_before" in str(e) or "hist_max_before" in str(e):
+                    # (например, older deployment с предыдущей сигнатурой).
+                    error_text = str(e)
+                    legacy_kw_error = (
+                        "hist_min_before" in error_text
+                        or "hist_max_before" in error_text
+                        or "unexpected keyword argument" in error_text
+                    )
+                    if legacy_kw_error:
                         optimize_kwargs.pop("hist_min_before", None)
                         optimize_kwargs.pop("hist_max_before", None)
                         results, best_info = optimize_price(**optimize_kwargs)

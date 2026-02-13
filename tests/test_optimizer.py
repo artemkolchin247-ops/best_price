@@ -79,6 +79,8 @@ def test_optimize_price_two_level_boundary_flags():
     assert meta["search_max"] == 1400.0
     assert meta["hist_min_before"] == 900.0
     assert meta["hist_max_before"] == 1700.0
+    assert "tol" in meta
+    assert meta["tol"] >= 100.0
 
 
 class DummyForecasterPeak:
