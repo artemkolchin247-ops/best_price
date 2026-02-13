@@ -10,11 +10,14 @@ import numpy as np
 import pandas as pd
 import time
 import uuid
+import logging
 from sklearn.linear_model import LinearRegression, PoissonRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error
 from sklearn.isotonic import IsotonicRegression
+
+logger = logging.getLogger(__name__)
 
 
 class BaseModel:
@@ -201,7 +204,7 @@ class SalesForecaster:
                     date_max = dt.max()
                     date_min = date_min.isoformat() if pd.notna(date_min) else None
                     date_max = date_max.isoformat() if pd.notna(date_max) else None
-            except Exception:
+            except (ValueError, TypeError):
                 # Если что-то пошло не так, оставляем None
                 date_min = None
                 date_max = None
@@ -349,7 +352,7 @@ class SalesForecaster:
         if rows_count == 0:
             critical_message = f"🚨 CRITICAL: Data became empty at step: {step_name}"
             self.pipeline_logs.append(critical_message)
-            print(critical_message)  # Также выводим в консоль
+            logger.warning(critical_message)
 
     def _prepare_xy(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
         """Подготовка данных для модели с обязательными шагами пайплайна и валидацией."""
@@ -406,7 +409,7 @@ class SalesForecaster:
                     if df2[col].dtype == 'object':
                         try:
                             df2[col] = pd.to_numeric(df2[col], errors="coerce")
-                        except:
+                        except (ValueError, TypeError):
                             pass  # Оставляем как есть если не получается
             
             self._add_pipeline_step("cast_numeric", df2)
@@ -627,13 +630,13 @@ class SalesForecaster:
                     non_zero_count = (df[col] != 0).sum()
                     if non_null_count >= 30 and non_zero_count >= 10:
                         available_ad_features.append(col)
-                        print(f"DEBUG: Found ad feature '{col}' with {non_null_count} observations")
+                        logger.debug("Found ad feature %s with %s observations", col, non_null_count)
                     else:
-                        print(f"DEBUG: Ad feature '{col}' has insufficient data ({non_null_count} obs, {non_zero_count} non-zero)")
+                        logger.debug("Ad feature %s has insufficient data (%s obs, %s non-zero)", col, non_null_count, non_zero_count)
                 else:
-                    print(f"DEBUG: Ad feature '{col}' has non-numeric dtype: {df[col].dtype}")
+                    logger.debug("Ad feature %s has non-numeric dtype: %s", col, df[col].dtype)
             else:
-                print(f"DEBUG: Ad feature '{col}' not found in dataset")
+                logger.debug("Ad feature %s not found in dataset", col)
         
         return available_ad_features
 
@@ -647,7 +650,7 @@ class SalesForecaster:
             clean_values = clean_values[clean_values != 0]  # Убираем нули
             
             if len(clean_values) < 10:
-                print(f"DEBUG: Insufficient non-zero values for '{col}': {len(clean_values)}")
+                logger.debug("Insufficient non-zero values for %s: %s", col, len(clean_values))
                 # Заполняем нулями если недостаточно данных
                 profiles["low"][col] = 0.0
                 profiles["med"][col] = 0.0
@@ -665,7 +668,7 @@ class SalesForecaster:
             profiles["med"][col] = float(p50)
             profiles["high"][col] = float(p75)
             
-            print(f"DEBUG: {col} profiles - low: {p25:.2f}, med: {p50:.2f}, high: {p75:.2f}")
+            logger.debug("%s profiles - low: %.2f, med: %.2f, high: %.2f", col, p25, p50, p75)
         
         return profiles
 
@@ -713,7 +716,7 @@ class SalesForecaster:
         ad_features = self._detect_ad_features(df)
         
         if not ad_features:
-            print("DEBUG: No valid ad features found")
+            logger.debug("No valid ad features found")
             return None  # Возвращаем None если нет признаков (ТЗ 3.1)
         
         # Построение профилей
@@ -980,7 +983,7 @@ class SalesForecaster:
                     rmse = float(np.sqrt(mean_squared_error(y_val, pred)))
                     if name == "loglog":
                         loglog_betas.append(m.get_elasticity(self.feature_cols))
-                except Exception:
+                except (ValueError, RuntimeError):
                     rmse = float("inf")
                 scores[name].append(rmse)
 
@@ -1337,9 +1340,9 @@ class SalesForecaster:
     def predict_sales(self, price: float, features_row: Optional[Dict[str, Any]] = None) -> float:
         """Predict sales quantity for a given price and optional other features."""
         # Debug логирование перед первой попыткой прогноза (ТЗ)
-        print("DEBUG model_name:", self.best_model_name)
-        print("DEBUG data_state:", getattr(self, 'data_state', 'UNKNOWN'))
-        print("DEBUG fit_return:", getattr(self, '_fit_return_value', 'UNKNOWN'))
+        logger.debug("model_name: %s", self.best_model_name)
+        logger.debug("data_state: %s", getattr(self, "data_state", "UNKNOWN"))
+        logger.debug("fit_return: %s", getattr(self, "_fit_return_value", "UNKNOWN"))
         
         if self.best_model_name is None:
             # Собираем информативный контекст о состоянии модели

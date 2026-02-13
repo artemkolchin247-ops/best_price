@@ -164,6 +164,8 @@ def optimize_price(
 
         results.append(
             {
+                # Backward-compatible alias for external consumers/tests
+                "price_before": p,
                 "price_before_spp": p,
                 "price_after_spp": p_after,
                 "predicted_sales": predicted_q,

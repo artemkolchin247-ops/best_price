@@ -27,13 +27,18 @@ class ValidationError(Exception):
 class ExcelIngestor:
     """Загрузчик нескольких Excel-файлов с маппингом колонок и базовой валидацией.
 
+    Args:
+        expected_columns: ожидаемые нормализованные колонки.
+        strict: если True, поднимает ValidationError при ошибках в report.
+
     Пример использования:
         ing = ExcelIngestor()
         df, report = ing.load_files(["a.xlsx", "b.xlsx"], mapping={"price":"price_before_spp"})
     """
 
-    def __init__(self, expected_columns: Optional[List[str]] = None):
+    def __init__(self, expected_columns: Optional[List[str]] = None, strict: bool = True):
         self.expected_columns = expected_columns or DEFAULT_COLUMNS
+        self.strict = strict
 
     def _normalize_col(self, name: str) -> str:
         # Убираем все кроме букв и цифр, включая кириллицу
@@ -197,6 +202,9 @@ class ExcelIngestor:
 
         combined = pd.concat(frames, ignore_index=True, sort=False)
         self._basic_validations(combined, report)
+
+        if self.strict and report.get("errors"):
+            raise ValidationError("; ".join(report["errors"]))
 
         return combined, report
 
