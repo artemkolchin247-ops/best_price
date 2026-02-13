@@ -33,123 +33,135 @@ def set_debug_level(level):
     """Установить уровень отладки в session state"""
     st.session_state["debug_level"] = level
 
-def create_debug_summary(model_result, sf):
-    """Создать краткую выжимку для debug_summary"""
-    if not model_result:
-        return None
+def create_risks_summary(best_info, model_result):
+    """Создать единый блок рисков на основе результатов оптимизации"""
+    risks = []
     
-    # Базовая информация
-    pipeline_log = model_result.get("pipeline_log", {})
-    run_id = pipeline_log.get("run_id", "N/A")
+    # Extrapolation риск
+    is_extrapolated = best_info.get("is_extrapolated", False)
+    if is_extrapolated:
+        risks.append({
+            "type": "Экстраполяция",
+            "severity": "warning", 
+            "description": "Оптимальная цена находится за пределами исторических данных",
+            "recommendation": "Прогноз спроса может быть неточным - рекомендуется осторожность"
+        })
     
-    # Статус
-    data_state = model_result.get("data_state", "UNKNOWN")
-    status = "OK" if data_state == "OK" else data_state
+    # Boundary риски
+    is_boundary_search = best_info.get("is_boundary_search", False)
+    is_boundary_history = best_info.get("is_boundary_history", False)
     
-    # Ошибка
-    error = model_result.get("error", {})
-    failed_step = error.get("failed_step", "")
-    error_code = error.get("code", "")
-    error_msg = error.get("message", "")
+    if is_boundary_search:
+        risks.append({
+            "type": "Граница поиска",
+            "severity": "warning",
+            "description": "Оптимум на границе диапазона поиска",
+            "recommendation": "Рассмотрите расширить диапазон цен для поиска лучшего оптимума"
+        })
     
-    # Данные
-    final_step = None
-    if pipeline_log.get("steps"):
-        final_step = pipeline_log["steps"][-1]
-    rows_final = final_step.get("rows", 0) if final_step else 0
+    if is_boundary_history:
+        risks.append({
+            "type": "Историческая граница", 
+            "severity": "info",
+            "description": "Оптимальная цена близка к историческим экстремумам",
+            "recommendation": "Проверьте адекватность прогноза на границах данных"
+        })
     
-    # SKU информация
-    unique_sku = model_result.get("unique_sku", 1)  # Будет заполнено в SalesForecaster
-    sku_mode = "single" if unique_sku == 1 else "multi"
+    # Low-data риск
+    stability_mode = model_result.get("stability_mode", "S1")
+    protective_mode = model_result.get("protective_mode")
     
-    # Модель
-    model_name = model_result.get("model_name", "None")
-    features = model_result.get("features_used", [])
-    features_str = ", ".join(features) if features else "None"
+    if protective_mode == "scenario" or stability_mode in ["S2", "S3"]:
+        severity = "error" if stability_mode == "S3" else "warning"
+        risks.append({
+            "type": "Мало данных",
+            "severity": severity,
+            "description": f"Режим стабильности: {stability_mode}, защита: {protective_mode}",
+            "recommendation": "Накопите больше данных для надежных прогнозов"
+        })
     
-    # Метрики
-    improvement = model_result.get("improvement_vs_baseline", 0)
-    improvement_str = f"+{improvement:.3f}%" if improvement > 0 else f"{improvement:.3f}%"
+    # Non-monotone риск
+    monotonicity_flag = model_result.get("monotonicity_flag", "monotone")
+    if monotonicity_flag == "non_monotone":
+        risks.append({
+            "type": "Немонотонность",
+            "severity": "warning",
+            "description": "Кривая спроса немонотонная - применена калибровка",
+            "recommendation": "Проверьте качество данных и аномалии"
+        })
     
-    # Эластичность
-    elasticity = model_result.get("elasticity", {})
-    elastic_med = elasticity.get("elasticity_med", 0)
-    elastic_iqr = elasticity.get("elasticity_iqr", 0)
-    elastic_str = f"{elastic_med:.2f} (IQR {elastic_iqr:.2f})" if elastic_med != 0 else "N/A"
-    
-    # Монотонность
-    mono_violations = elasticity.get("mono_violations", 0)
-    mono_str = f"{mono_violations:.1f}%" if mono_violations > 0 else "0%"
-    
-    # Protective mode
-    protective_mode = model_result.get("protective_mode", "None") or "None"
-    reason = ""
-    if protective_mode == "scenario":
-        reason = " (reason: training failed)"
-    elif protective_mode == "protective":
-        reason = " (reason: unstable zone)"
-    
-    # Формируем summary строку
-    summary_parts = []
-    summary_parts.append(f"run_id={run_id}")
-    summary_parts.append(f"status={status}")
-    
-    if failed_step:
-        summary_parts.append(f"step={failed_step}")
-    
-    if error_code:
-        summary_parts.append(f"error={error_code} ({error_msg[:50]}...)" if len(error_msg) > 50 else f"error={error_code} ({error_msg})")
-    
-    summary_parts.append(f"data_state={data_state}")
-    summary_parts.append(f"rows_final={rows_final}")
-    summary_parts.append(f"unique_sku={unique_sku}")
-    summary_parts.append(f"sku_mode={sku_mode}")
-    summary_parts.append(f"features={features_str}")
-    summary_parts.append(f"model={model_name}")
-    summary_parts.append(f"improvement={improvement_str}")
-    summary_parts.append(f"elasticity={elastic_str}")
-    summary_parts.append(f"mono={mono_str}")
-    summary_parts.append(f"mode={protective_mode}{reason}")
-    
-    return {
-        "summary": " | ".join(summary_parts),
-        "run_id": run_id,
-        "status": status,
-        "failed_step": failed_step,
-        "error_code": error_code,
-        "error_message": error_msg,
-        "data_state": data_state,
-        "rows_final": rows_final,
-        "unique_sku": unique_sku,
-        "sku_mode": sku_mode,
-        "features": features_str,
-        "model": model_name,
-        "improvement": improvement_str,
-        "improvement_value": improvement,  # Для gating
-        "elasticity": elastic_str,
-        "monotonicity": mono_str,
-        "protective_mode": protective_mode + reason
-    }
+    return risks
 
-def create_debug_full(model_result, sf):
-    """Создать полную отладочную информацию"""
-    if not model_result:
-        return None
+def display_risks(risks):
+    """Отобразить единый блок рисков"""
+    if not risks:
+        st.success("✅ Риски не обнаружены")
+        return
     
-    return {
-        "model_result": model_result,
-        "debug_info": {
-            "best_model_name": getattr(sf, 'best_model_name', 'NOT_FOUND'),
-            "data_state": getattr(sf, 'data_state', 'UNKNOWN'),
-            "fit_return_value": getattr(sf, '_fit_return_value', 'UNKNOWN'),
-            "error": getattr(sf, 'error', {}),
-            "quality_info": getattr(sf, 'quality_info', {}),
-            "elasticity_info": getattr(sf, 'elasticity_info', {}),
-            "performance_info": getattr(sf, 'performance_info', {}),
-            "feature_cols": getattr(sf, 'feature_cols', []),
-            "models": list(getattr(sf, 'models', {}).keys())
+    st.markdown("### ⚠️ Риски и рекомендации")
+    
+    for risk in risks:
+        severity_icons = {
+            "error": "🚫",
+            "warning": "⚠️", 
+            "info": "ℹ️"
+        }
+        
+        severity_colors = {
+            "error": "red",
+            "warning": "orange", 
+            "info": "blue"
+        }
+        
+        icon = severity_icons.get(risk["severity"], "📋")
+        color = severity_colors.get(risk["severity"], "gray")
+        
+        st.markdown(f"""
+        <div style="border-left: 4px solid {color}; padding: 10px; margin: 5px 0;">
+            <strong>{icon} {risk['type']}</strong><br>
+            <small>{risk['description']}</small><br>
+            <small><em>💡 {risk['recommendation']}</em></small>
+        </div>
+        """, unsafe_allow_html=True)
+
+def create_run_summary(params, best_info, model_result):
+    """Создать единый summary запуска"""
+    summary = {
+        "Параметры оптимизации": {
+            "Диапазон цен": f"{params['price_min']:.0f} - {params['price_max']:.0f} ₽",
+            "Шаг": f"{params['step']:.0f} ₽",
+            "Комиссия": f"{params['commission_rate']*100:.1f}%",
+            "НДС": f"{params['vat_rate']*100:.1f}%", 
+            "СПП": f"{params['spp']*100:.1f}%",
+            "COGS": f"{params['cogs']:.0f} ₽",
+            "Логистика": f"{params['logistics']:.0f} ₽",
+            "Хранение": f"{params['storage']:.0f} ₽"
+        },
+        "Результаты": {
+            "Оптимальная цена": f"{best_info.get('best_price_before_spp', 0):.0f} ₽",
+            "Максимальная прибыль": f"{best_info.get('best_profit', 0):.0f} ₽",
+            "Прогноз продаж": f"{best_info.get('best_sales', 0):.0f} шт."
+        },
+        "Модель": {
+            "Тип": model_result.get("best_model_name", "N/A"),
+            "Стабильность": model_result.get("stability_mode", "N/A"),
+            "Монотонность": model_result.get("monotonicity_flag", "N/A"),
+            "Защита": model_result.get("protective_mode", "N/A")
         }
     }
+    
+    return summary
+
+def display_run_summary(summary):
+    """Отобразить единый summary запуска"""
+    st.markdown("### 📋 Сводка запуска")
+    
+    for section_name, section_data in summary.items():
+        with st.expander(f"{section_name}", expanded=True):
+            for key, value in section_data.items():
+                st.markdown(f"**{key}:** {value}")
+
+# Удалена старая функция create_debug_summary - заменена на новые функции рисков и summary
 
 st.set_page_config(page_title="Best Price Optimizer", layout="wide")
 
@@ -411,294 +423,31 @@ def main():
 
         st.success("Оптимизация завершена")
 
-        # --- Расширенная диагностика данных и модели ---
-        with st.expander("🛠 Расширенная диагностика качества"):
-            # Получаем данные из модели
-            if hasattr(sf, 'model_result'):
-                model_result = sf.get_model_result()
-                if not model_result:  # Пустой результат - настоящая ошибка
-                    # Пытаемся получить информативное сообщение об ошибке
-                    try:
-                        # Попробуем вызвать predict_sales чтобы получить информативную ошибку
-                        sf.predict_sales(100.0)
-                    except RuntimeError as e:
-                        st.error(f"🚫 **Модель не обучена:** {str(e)}")
-                        return
-                    except (ValueError, TypeError):
-                        st.warning("Модель не обучена: неизвестная ошибка")
-                        return
-            else:
-                st.warning("Модель не обучена: объект модели не найден")
-                return
-            
-            # 1. Структурированные логи пайплайна (ТЗ 2) - МАКСИМАЛЬНО ПОДРОБНО
-            st.markdown("### 🔍 Полные логи пайплайна обработки данных")
-            pipeline_log = model_result.get("pipeline_log", {})
-            
-            if pipeline_log and pipeline_log.get("steps"):
-                st.write(f"**Run ID:** `{pipeline_log.get('run_id', 'N/A')}`")
-                
-                # Создаем таблицу с детальной информацией
-                log_data = []
-                for i, step in enumerate(pipeline_log["steps"]):
-                    status_emoji = "✅" if step["status"] == "ok" else "❌"
-                    
-                    # NaN counts
-                    nan_counts = step.get("nan_counts", {})
-                    nan_text = ", ".join([f"{k}:{v}" for k, v in nan_counts.items() if v > 0]) or "нет"
-                    
-                    # Период данных
-                    period_text = "N/A"
-                    if step.get("date_min") and step.get("date_max"):
-                        period_text = f"{step['date_min']} → {step['date_max']}"
-                    
-                    # Добавляем в таблицу
-                    log_data.append({
-                        "№": i + 1,
-                        "Шаг": f"{status_emoji} {step['name']}",
-                        "Статус": step["status"],
-                        "Строк": step["rows"],
-                        "Колонки": step["cols"],
-                        "NaN": nan_text,
-                        "Период": period_text,
-                        "Заметки": step.get("notes", "нет")
-                    })
-                
-                # Отображаем таблицу
-                st.dataframe(pd.DataFrame(log_data), use_container_width=True)
-                
-                # Статистика по статусам
-                status_counts = {}
-                for step in pipeline_log["steps"]:
-                    status = step["status"]
-                    status_counts[status] = status_counts.get(status, 0) + 1
-                
-                st.markdown("#### 📊 Статистика по статусам")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("✅ Успешных шагов", status_counts.get("ok", 0))
-                with col2:
-                    st.metric("❌ Проваленных шагов", status_counts.get("failed", 0))
-                with col3:
-                    total_steps = len(pipeline_log["steps"])
-                    success_rate = (status_counts.get("ok", 0) / total_steps * 100) if total_steps > 0 else 0
-                    st.metric("📈 Успешных (%)", f"{success_rate:.1f}%")
-                
-                # Детальная информация по каждому шагу
-                st.markdown("#### 🔍 Детальная информация по шагам")
-                for i, step in enumerate(pipeline_log["steps"]):
-                    with st.expander(f"Шаг {i+1}: {step['name']} ({step['status']})"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric("Строк", step["rows"])
-                            st.metric("Колонки", step["cols"])
-                            st.metric("Статус", step["status"])
-                        with col2:
-                            # NaN counts детально
-                            nan_counts = step.get("nan_counts", {})
-                            if nan_counts:
-                                st.write("**NaN по полям:**")
-                                for field, count in nan_counts.items():
-                                    if count > 0:
-                                        st.write(f"  • {field}: {count}")
-                            else:
-                                st.write("**NaN:** нет")
-                        
-                        if step.get("date_min") and step.get("date_max"):
-                            st.write(f"**Период:** {step['date_min']} → {step['date_max']}")
-                        
-                        if step.get("notes"):
-                            st.info(f"📝 **Заметки:** {step['notes']}")
-            else:
-                st.warning("Логи пайплайна недоступны")
-            
-            # 2. Детальная информация об ошибках - МАКСИМАЛЬНО ПОДРОБНО
-            st.markdown("### 🚨 Детальная информация об ошибках")
-            error = model_result.get("error", {})
-            
-            if error.get("code"):
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Код ошибки", error.get("code", ""))
-                    st.metric("Шаг", error.get("failed_step", ""))
-                with col2:
-                    st.metric("Тип исключения", error.get("exception_type", ""))
-                    st.metric("Traceback ID", error.get("traceback_id", ""))
-                with col3:
-                    st.metric("Data State", model_result.get("data_state", "UNKNOWN"))
-                    st.metric("Fit Return", getattr(sf, '_fit_return_value', 'UNKNOWN'))
-                with col4:
-                    st.metric("Best Model", model_result.get("model_name", "None"))
-                    st.metric("Protective Mode", model_result.get("protective_mode", "None"))
-                
-                if error.get("message"):
-                    st.error(f"**Сообщение:** {error['message']}")
-                
-                # Декларативные рекомендации
-                recommendations = error.get("recommendations", [])
-                if recommendations:
-                    st.markdown("### 💡 Что сделать:")
-                    for i, rec in enumerate(recommendations, 1):
-                        st.write(f"{i}. {rec}")
-                else:
-                    st.info("Рекомендации недоступны")
-            else:
-                st.success("✅ Ошибок не обнаружено")
-            
-            # 3. Состояние модели и защитные режимы - МАКСИМАЛЬНО ПОДРОБНО
-            st.markdown("### 🤖 Состояние модели и защитные режимы")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Data State", model_result.get("data_state", "UNKNOWN"))
-                st.metric("Best Model", model_result.get("model_name", "None"))
-                st.metric("Protective Mode", model_result.get("protective_mode", "None"))
-            with col2:
-                st.metric("Stability Mode", model_result.get("stability_mode", "UNKNOWN"))
-                st.metric("Monotonicity", model_result.get("monotonicity_flag", "UNKNOWN"))
-                st.metric("Improvement", f"{model_result.get('improvement_vs_baseline', 0):.3f}")
-            with col3:
-                st.metric("Fit Return", getattr(sf, '_fit_return_value', 'UNKNOWN'))
-                st.metric("Features Used", len(model_result.get("features_used", [])))
-                st.metric("Elasticity Med", f"{model_result.get('elasticity', {}).get('elasticity_med', 0):.3f}")
-            
-            # Детальная информация о признаках
-            features_used = model_result.get("features_used", [])
-            if features_used:
-                st.markdown("#### 🔧 Используемые признаки")
-                st.write(", ".join(features_used))
-            
-            # Детальная информация об эластичности
-            elasticity = model_result.get("elasticity", {})
-            if elasticity:
-                st.markdown("#### 📈 Детальная информация об эластичности")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Elasticity Med", f"{elasticity.get('elasticity_med', 0):.3f}")
-                    st.metric("Elasticity IQR", f"{elasticity.get('elasticity_iqr', 0):.3f}")
-                with col2:
-                    st.metric("Beta Median", f"{elasticity.get('beta_median', 0):.3f}")
-                    st.metric("Beta IQR", f"{elasticity.get('beta_iqr', 0):.3f}")
-                with col3:
-                    st.metric("Mono Violations", elasticity.get('mono_violations', 0))
-                    st.metric("R Squared", f"{elasticity.get('r_squared', 0):.3f}")
-                
-                # Статистика локальной эластичности
-                e_stats = elasticity.get('e_stats', {})
-                if e_stats:
-                    st.markdown("##### 📊 Статистика локальной эластичности")
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("E Mean", f"{e_stats.get('mean', 0):.3f}")
-                        st.metric("E Std", f"{e_stats.get('std', 0):.3f}")
-                    with col2:
-                        st.metric("E Min", f"{e_stats.get('min', 0):.3f}")
-                        st.metric("E Max", f"{e_stats.get('max', 0):.3f}")
-                    with col3:
-                        st.metric("E 25%", f"{e_stats.get('q25', 0):.3f}")
-                        st.metric("E 75%", f"{e_stats.get('q75', 0):.3f}")
-                    with col4:
-                        st.metric("Valid Points", e_stats.get('valid_points', 0))
-                        st.metric("Total Points", e_stats.get('total_points', 0))
-            
-            # 4. Метрики качества - только при data_state == "OK" (ТЗ)
-            data_state = model_result.get("data_state", "UNKNOWN")
-            if data_state == "OK":
-                st.markdown("### 📊 Метрики качества данных")
-                q = model_result.get("quality", {})
-                if q:
-                    col_q1, col_q2, col_q3, col_q4 = st.columns(4)
-                    col_q1.metric("Дней с данными", q.get("n_days", 0))
-                    col_q2.metric("Уникальных цен", q.get("n_price_unique", 0))
-                    col_q3.metric("Вариация цены (CV)", f"{q.get('price_cv', 0)*100:.1f}%")
-                    col_q4.metric("Доля нулей", f"{q.get('zero_share', 0)*100:.0f}%")
-                    
-                    if q.get("data_ok"):
-                        st.success("✅ Данных достаточно для обучения эластичности.")
-                    else:
-                        st.warning("⚠️ Данных критически мало или цена не менялась.")
-                else:
-                    st.info("Метрики качества недоступны")
-            else:
-                st.markdown("### ⚠️ Метрики качества недоступны")
-                st.info(f"Метрики качества не доступны из-за состояния данных: {data_state}")
-            
-            # 5. Техническая информация (Debug) - МАКСИМАЛЬНО ПОДРОБНО
-            st.markdown("### 🔍 Техническая информация (Debug)")
-            debug_info = {
-                "model_result": model_result,  # Единый источник данных
-                "features_used": model_result.get("features_used", []),
-                "pipeline_log": model_result.get("pipeline_log", []),  # Канонический атрибут
-                "debug_info": {
-                    "best_model_name": sf.best_model_name,
-                    "data_state": getattr(sf, 'data_state', 'UNKNOWN'),
-                    "fit_return_value": getattr(sf, '_fit_return_value', 'UNKNOWN'),
-                    "error": getattr(sf, 'error', {}),
-                    "quality_info": getattr(sf, 'quality_info', {}),
-                    "elasticity_info": getattr(sf, 'elasticity_info', {}),
-                    "performance_info": getattr(sf, 'performance_info', {}),
-                    "feature_cols": getattr(sf, 'feature_cols', []),
-                    "models": list(getattr(sf, 'models', {}).keys())
-                }
-            }
-            st.json(debug_info)
-
-            # 2. Модель и эластичность - ЖЕСТКИЙ GATING по data_state (ТЗ)
-        if data_state != "OK":
-            st.error(f"🚫 **Анализ недоступен:** состояние данных - {data_state}")
-            
-            # Показываем декларативные рекомендации если есть ошибка
-            if error.get("code") and error.get("recommendations"):
-                st.markdown("### 💡 Что сделать:")
-                for i, rec in enumerate(error["recommendations"], 1):
-                    st.write(f"{i}. {rec}")
-            else:
-                # Общие рекомендации для состояний без кода ошибки
-                st.info("💡 **Общие рекомендации:**")
-                if data_state == "TOO_SMALL":
-                    st.write("• Увеличьте период наблюдений (минимум 7 дней)")
-                    st.write("• Добавьте больше уникальных цен (минимум 3)")
-                elif data_state == "NO_PRICE_VARIATION":
-                    st.write("• Проверьте корректность данных о заказах")
-                    st.write("• Убедитесь что цена варьируется (CV > 1%)")
-                    st.write("• Снизьте долю нулевых заказов (< 80%)")
-                elif data_state == "EMPTY":
-                    st.write("• Проверьте наличие и формат входных данных")
-                else:
-                    st.write("• Проверьте наличие и качество входных данных")
-            return
-
-
-        # Diagnostic info
-        info = sf.get_info()
-        st.info(f"Используемая модель: **{info.get('model_name')}**")
+        # Создаем параметры для summary
+        run_params = {
+            "price_min": price_min,
+            "price_max": price_max, 
+            "step": step,
+            "commission_rate": commission_pct / 100.0,
+            "vat_rate": vat_pct / 100.0,
+            "spp": spp_pct / 100.0,
+            "cogs": cogs,
+            "logistics": logistics,
+            "storage": storage
+        }
         
-        # Причина выбора модели
-        if info.get("model_selection_reason"):
-            st.caption(f"🎯 **Причина выбора:** {info['model_selection_reason']}")
+        # Получаем результаты модели
+        model_result = sf.get_model_result() if hasattr(sf, 'get_model_result') else {}
         
-        st.write(f"Используемые признаки: `{sf.feature_cols}`")
-        if "elasticity" in info:
-            e_data = info["elasticity"]
-            e_val = e_data.get("elasticity_med", 0)  # Исправляем на новый ключ
-            e_iqr = e_data.get("elasticity_iqr", 0)  # Исправляем на новый ключ
-            
-            # Категоризация эластичности (с допуском tol=0.05)
-            tol = 0.05
-            if e_val < -1.0 - tol:
-                e_cat = "эластичный"
-                e_color = "green"
-            elif abs(e_val + 1.0) <= tol:
-                e_cat = "пограничный (около -1)"
-                e_color = "orange"
-            else:
-                e_cat = "неэластичный"
-                e_color = "blue"
-            
-            st.markdown(f"**Характер спроса:** :{e_color}[{e_cat}]")
-            st.write(f"Эластичность (med): **{e_val:.3f}** (IQR: {e_iqr:.2f})")
-            
-            if e_iqr > 0.4:
-                st.warning("⚠️ **Внимание: Оценка эластичности нестабильна (высокий IQR).** Рекомендуется полагаться на анализ прибыли по сетке, а не на коэффициент.")
+        # Отображаем единый summary запуска
+        summary = create_run_summary(run_params, best_info, model_result)
+        display_run_summary(summary)
+        
+        # Отображаем единый блок рисков
+        risks = create_risks_summary(best_info, model_result)
+        display_risks(risks)
+        
+        # --- Визуализация результатов ---
 
 
         # Historical context
