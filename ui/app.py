@@ -752,286 +752,286 @@ def main():
         st.write(f"Исторический диапазон цен (до СПП): **{p_min_hist:.0f} — {p_max_hist:.0f} RUB**")
     
     st.subheader("1. Анализ спроса и эластичности")
-        
-        # ⚠️ ВАЖНО: Запрещено пересчитывать метрики в UI! (ТЗ 1.2)
-        # Использовать только данные из model_result
-        # ❌ recalculate_improvement()
-        # ❌ recalculate_stability() 
-        # ✅ value = model_result["..."]
-        
-        # Извлекаем данные из единого результата (ТЗ 6.1)
-        e_info = model_result.get("elasticity", {})
-        q_info = model_result.get("quality", {})
-        
-        # Собираем UI значения для sanity-check
-        ui_values = {
-            "improvement": model_result.get("improvement_vs_baseline", 0),
-            "stability": model_result.get("stability_mode", ""),
-            "protective": model_result.get("protective_mode", ""),
-            "elasticity": e_info.get("elasticity_med", 0),
-            "monotonicity": model_result.get("monotonicity_flag", "")
-        }
-        
-        # Выполняем sanity-check
-        sanity_errors = sanity_check(model_result, ui_values)
-        if sanity_errors:
-            st.error("🚨 **Обнаружены несогласованности данных:**")
-            for error in sanity_errors:
-                st.error(f"• {error}")
-            st.error("Пожалуйста, проверьте логику расчета метрик!")
-                
-            # Адаптивное форматирование (ТЗ 3.1)
-            def fmt_e(val):
-                if val is None: return "Н/Д"
-                abs_v = abs(val)
-                if abs_v < 0.1:
-                    return f"{val:.4f}"
-                else:
-                    return f"{val:.2f}"
+    
+    # ⚠️ ВАЖНО: Запрещено пересчитывать метрики в UI! (ТЗ 1.2)
+    # Использовать только данные из model_result
+    # ❌ recalculate_improvement()
+    # ❌ recalculate_stability() 
+    # ✅ value = model_result["..."]
+    
+    # Извлекаем данные из единого результата (ТЗ 6.1)
+    e_info = model_result.get("elasticity", {})
+    q_info = model_result.get("quality", {})
+    
+    # Собираем UI значения для sanity-check
+    ui_values = {
+        "improvement": model_result.get("improvement_vs_baseline", 0),
+        "stability": model_result.get("stability_mode", ""),
+        "protective": model_result.get("protective_mode", ""),
+        "elasticity": e_info.get("elasticity_med", 0),
+        "monotonicity": model_result.get("monotonicity_flag", "")
+    }
+    
+    # Выполняем sanity-check
+    sanity_errors = sanity_check(model_result, ui_values)
+    if sanity_errors:
+        st.error("🚨 **Обнаружены несогласованности данных:**")
+        for error in sanity_errors:
+            st.error(f"• {error}")
+        st.error("Пожалуйста, проверьте логику расчета метрик!")
+            
+        # Адаптивное форматирование (ТЗ 3.1)
+        def fmt_e(val):
+            if val is None: return "Н/Д"
+            abs_v = abs(val)
+            if abs_v < 0.1:
+                return f"{val:.4f}"
+            else:
+                return f"{val:.2f}"
 
-            e_med = e_info.get("elasticity_med", 0.0)
-            e_iqr = e_info.get("elasticity_iqr", 0.0)
+        e_med = e_info.get("elasticity_med", 0.0)
+        e_iqr = e_info.get("elasticity_iqr", 0.0)
+        
+        # Обработка None значений
+        if e_med is None:
+            e_med_display = "Н/Д"
+            e_iqr_display = "Н/Д"
+        else:
+            e_med_display = fmt_e(e_med)
+            e_iqr_display = fmt_e(e_iqr)
+        
+        col_e1, col_e2, col_e3 = st.columns(3)
+        col_e1.metric("Эластичность (median)", e_med_display)
+        col_e2.metric("Разброс (IQR)", e_iqr_display)
+        
+        # Эластичность для разных профилей рекламы (ТЗ 6.6)
+        ad_profiles = e_info.get("ad_profiles", {})
+        available_features = ad_profiles.get("available_features", [])
+        
+        # Правильная проверка наличия профилей (ТЗ 3.1)
+        if ad_profiles is None:
+            col_e3.metric("Профили рекламы", "Нет данных")
+        elif not available_features:
+            col_e3.metric("Профили рекламы", "Нет данных")
+        else:
+            low_e = e_info.get("low_elasticity_med", 0)
+            med_e = e_info.get("med_elasticity_med", 0)
+            high_e = e_info.get("high_elasticity_med", 0)
             
-            # Обработка None значений
-            if e_med is None:
-                e_med_display = "Н/Д"
-                e_iqr_display = "Н/Д"
+            # Проверяем что профили построены корректно
+            if low_e == 0 and med_e == 0 and high_e == 0:
+                col_e3.metric("Профили рекламы", "Недостаточно данных")
             else:
-                e_med_display = fmt_e(e_med)
-                e_iqr_display = fmt_e(e_iqr)
-            
-            col_e1, col_e2, col_e3 = st.columns(3)
-            col_e1.metric("Эластичность (median)", e_med_display)
-            col_e2.metric("Разброс (IQR)", e_iqr_display)
-            
-            # Эластичность для разных профилей рекламы (ТЗ 6.6)
-            ad_profiles = e_info.get("ad_profiles", {})
-            available_features = ad_profiles.get("available_features", [])
-            
-            # Правильная проверка наличия профилей (ТЗ 3.1)
-            if ad_profiles is None:
-                col_e3.metric("Профили рекламы", "Нет данных")
-            elif not available_features:
-                col_e3.metric("Профили рекламы", "Нет данных")
-            else:
-                low_e = e_info.get("low_elasticity_med", 0)
-                med_e = e_info.get("med_elasticity_med", 0)
-                high_e = e_info.get("high_elasticity_med", 0)
+                col_e3.metric("Разброс эластичности (ads)", f"{fmt_e(low_e)} - {fmt_e(high_e)}")
                 
-                # Проверяем что профили построены корректно
-                if low_e == 0 and med_e == 0 and high_e == 0:
-                    col_e3.metric("Профили рекламы", "Недостаточно данных")
-                else:
-                    col_e3.metric("Разброс эластичности (ads)", f"{fmt_e(low_e)} - {fmt_e(high_e)}")
+                # Детальная информация о профилях
+                with st.expander("📊 Профили рекламы"):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Low эластичность", fmt_e(low_e))
+                        st.write("**Low профиль:**")
+                        for feature in available_features:
+                            val = ad_profiles.get("low", {}).get(feature, 0)
+                            st.write(f"{feature}: {val:.1f}")
                     
-                    # Детальная информация о профилях
-                    with st.expander("📊 Профили рекламы"):
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Low эластичность", fmt_e(low_e))
-                            st.write("**Low профиль:**")
-                            for feature in available_features:
-                                val = ad_profiles.get("low", {}).get(feature, 0)
-                                st.write(f"{feature}: {val:.1f}")
-                        
-                        with col2:
-                            st.metric("Med эластичность", fmt_e(med_e))
-                            st.write("**Med профиль:**")
-                            for feature in available_features:
-                                val = ad_profiles.get("med", {}).get(feature, 0)
-                                st.write(f"{feature}: {val:.1f}")
-                        
-                        with col3:
-                            st.metric("High эластичность", fmt_e(high_e))
-                            st.write("**High профиль:**")
-                            for feature in available_features:
-                                val = ad_profiles.get("high", {}).get(feature, 0)
-                                st.write(f"{feature}: {val:.1f}")
-                        
-                        st.write(f"**Метод фиксации признаков:** {ad_profiles.get('method', 'N/A')}")
-                        st.write(f"**Доступные признаки:** {', '.join(available_features)}")
+                    with col2:
+                        st.metric("Med эластичность", fmt_e(med_e))
+                        st.write("**Med профиль:**")
+                        for feature in available_features:
+                            val = ad_profiles.get("med", {}).get(feature, 0)
+                            st.write(f"{feature}: {val:.1f}")
+                    
+                    with col3:
+                        st.metric("High эластичность", fmt_e(high_e))
+                        st.write("**High профиль:**")
+                        for feature in available_features:
+                            val = ad_profiles.get("high", {}).get(feature, 0)
+                            st.write(f"{feature}: {val:.1f}")
+                    
+                    st.write(f"**Метод фиксации признаков:** {ad_profiles.get('method', 'N/A')}")
+                    st.write(f"**Доступные признаки:** {', '.join(available_features)}")
+        
+        # Режимы стабильности и монотонность по ТЗ 5
+        stability = model_result.get("stability_mode", "S1")
+        st.markdown(f"**Режим стабильности:** `{stability}`")
+        
+        # Монотонность по используемой кривой (ТЗ 4.4)
+        mono_v = e_info.get("mono_violations", 0.0) * 100
+        mono_v_raw = e_info.get("mono_violations_raw", 0.0) * 100
+        calibrated = e_info.get("calibrated", False)
+        
+        if mono_v <= 20:
+            mono_text = "Почти монотонен"
+            mono_emoji = "✅"
+        else:
+            mono_text = "Немонотонен"
+            mono_emoji = "⚠️"
+        
+        st.markdown(f"**Монотонность спроса:** {mono_emoji} {mono_text} (нарушения: {mono_v:.1f}%)")
+        
+        # Информация о калибровке
+        if calibrated:
+            st.info(f"🔧 **Применена калибровка:** исходные нарушения {mono_v_raw:.1f}% → после калибровки {mono_v:.1f}%")
+        elif mono_v_raw > 20:
+            st.warning(f"⚠️ **Обнаружена немонотонность:** {mono_v_raw:.1f}% нарушений, но калибровка не применялась")
+
+        # Отладочный режим (ТЗ 10)
+        with st.expander("🔍 Техническая диагностика (Debug)"):
+            # Формируем полный JSON лог по ТЗ 10 (используем model_result)
+            debug_info = {
+                "model_result": model_result,  # Единый источник данных
+                "features_used": model_result.get("features_used", []),
+                "pipeline_log": model_result.get("pipeline_log", []),  # Канонический атрибут
+                "sanity_check": {
+                    "errors": sanity_errors,
+                    "status": "PASS" if not sanity_errors else "FAIL"
+                }
+            }
+            st.json(debug_info)
             
-            # Режимы стабильности и монотонность по ТЗ 5
-            stability = model_result.get("stability_mode", "S1")
-            st.markdown(f"**Режим стабильности:** `{stability}`")
+            st.write("**Средняя эластичность на диапазоне (наклон ln(q)~ln(p)):**")
+            e_global = e_info.get("elasticity_med", 0)
+            global_reg = e_info.get("global_regression", {})
+            r2 = global_reg.get("r_squared")
+            n_points = global_reg.get("n_points", 0)
             
-            # Монотонность по используемой кривой (ТЗ 4.4)
-            mono_v = e_info.get("mono_violations", 0.0) * 100
-            mono_v_raw = e_info.get("mono_violations_raw", 0.0) * 100
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Средняя эластичность", fmt_e(e_global))
+            with col2:
+                if r2 is not None:
+                    st.metric("R² регрессии", f"{r2:.3f}")
+                else:
+                    st.metric("R² регрессии", "N/A")
+            with col3:
+                st.metric("Точек регрессии", f"{n_points}")
+                
+            st.write("**Predicted Orders (grid):**")
+            st.line_chart(e_info.get("q_grid", []))
+            
+            # Локальная эластичность по сетке
+            e_grid = e_info.get("e_grid", [])
+            e_stats = e_info.get("e_stats", {})
+            q_grid_used = e_info.get("q_grid", [])
+            
+            # Проверяем количество точек по q_grid_used (ТЗ)
+            if len(q_grid_used) < 5:
+                st.warning("⚠ Недостаточно данных для расчета локальной эластичности (len(q_grid_used) < 5)")
+            elif e_grid and len(e_grid) > 0 and e_stats.get("len", 0) > 0:
+                st.write("**Локальная эластичность по сетке:**")
+                
+                # Фильтруем NaN для визуализации
+                e_grid_clean = [e for e in e_grid if not np.isnan(e)]
+                if e_grid_clean:
+                    st.line_chart(e_grid_clean)
+                
+                # Статистика локальной эластичности
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Min", fmt_e(e_stats.get("min", 0)))
+                with col2:
+                    st.metric("Median", fmt_e(e_stats.get("median", 0)))
+                with col3:
+                    st.metric("Max", fmt_e(e_stats.get("max", 0)))
+                with col4:
+                    st.metric("Std", f"{e_stats.get('std', 0):.3f}")
+                
+                # Проверка на баг "копирования" (ТЗ 2.3)
+                if len(e_grid_clean) > 1:
+                    all_same = all(abs(e - e_grid_clean[0]) < 1e-10 for e in e_grid_clean)
+                    if all_same:
+                        st.error("⚠️ Обнаружен баг: все значения локальной эластичности одинаковы!")
+                    else:
+                        std_val = e_stats.get('std', 0)
+                        if std_val > 0:
+                            st.success(f"✅ Локальная эластичность варьируется (std = {std_val:.3f})")
+                        else:
+                            st.warning("⚠️ Стандартное отклонение равно 0 (возможно, идеальная степенная функция)")
+                
+                st.write(f"**Длина e_grid:** {e_stats.get('len', 0)} точек")
+                st.write(
+                    f"**Доля нулевых локальных эластичностей:** {e_stats.get('zero_share', 0.0):.1%}"
+                )
+                st.write(
+                    f"**Исключено невалидных точек:** {e_stats.get('excluded_invalid_points', 0)}"
+                )
+            else:
+                st.warning("⚠ Недостаточно данных для расчета локальной эластичности")
+            
+            # Показываем кривые спроса
+            st.write("**Кривые спроса:**")
+            
+            # Основная кривая (используется в расчетах)
+            st.line_chart(e_info.get("q_grid", []))
+            
+            # Дополнительные кривые если есть калибровка
+            q_grid_raw = e_info.get("q_grid_raw", [])
+            q_grid_calibrated = e_info.get("q_grid_calibrated", [])
             calibrated = e_info.get("calibrated", False)
             
-            if mono_v <= 20:
-                mono_text = "Почти монотонен"
-                mono_emoji = "✅"
-            else:
-                mono_text = "Немонотонен"
-                mono_emoji = "⚠️"
+            if calibrated and q_grid_calibrated:
+                st.write("**Сравнение кривых (сырая → калиброванная):**")
+                comparison_df = pd.DataFrame({
+                    'Raw': q_grid_raw,
+                    'Calibrated': q_grid_calibrated,
+                    'Used': e_info.get("q_grid", [])
+                })
+                st.line_chart(comparison_df)
+            elif q_grid_raw and len(q_grid_raw) > 0:
+                st.write("**Сырая кривая (калибровка не применялась):**")
+                st.line_chart(q_grid_raw)
+            # RMSE vs Baseline (используем данные из model_result)
+            improvement = model_result.get("improvement_vs_baseline", 0)
+            st.write(f"🏆 Точность vs Baseline: **{improvement:+.1f}%**")
             
-            st.markdown(f"**Монотонность спроса:** {mono_emoji} {mono_text} (нарушения: {mono_v:.1f}%)")
+        # Проверка разрешения положительной эластичности (ТЗ 3.1) - строгие критерии
+        # Новое условие: сообщение только если эластичность реально положительная и стабильная
+        if e_med is not None and e_med > 0.1 and e_iqr < 0.3 and q_info.get("corr", 0) > 0.1:
+            st.info("💡 **Разрешена положительная эластичность:** эластичность > 0.1, IQR < 0.3, корреляция > 0.1. Сигнал качества/сезона.")
+        # Во всех остальных случаях сообщение не показывается (ТЗ)
+        
+        # 3. Режимы стабильности и защитные режимов по ТЗ 7.2 - используем только model_result (ТЗ 6.1)
+        stability = model_result.get("stability_mode", "S1")
+        protective = model_result.get("protective_mode")
+        protective_logic = e_info.get("protective_logic", {})
+        
+        # Режим стабильности
+        if stability == "S1":
+            st.success(f"✅ **Стабильный спрос**: разрешён широкий поиск в пределах истории.")
+        elif stability == "S2":
+            st.warning(f"⚠️ **Умеренно нестабилен**: оптимизация ограничена историческим диапазоном цен.")
+        else:  # S3
+            st.warning(f"🛡️ **Нестабилен**: включён консервативный режим (локальный поиск/штраф/сценарии).")
+        
+        # Защитный режим
+        if protective == "scenario":
+            st.error(f"🚫 **Режим сценарного анализа:** {protective_logic.get('reason', 'Причина неизвестна')}")
+        elif protective == "conservative":
+            st.warning(f"⚠️ **Консервативный режим:** {protective_logic.get('reason', 'Причина неизвестна')}")
+        else:
+            st.success(f"✅ **Стандартная оптимизация:** {protective_logic.get('reason', 'Хорошие условия модели')}")
             
-            # Информация о калибровке
-            if calibrated:
-                st.info(f"🔧 **Применена калибровка:** исходные нарушения {mono_v_raw:.1f}% → после калибровки {mono_v:.1f}%")
-            elif mono_v_raw > 20:
-                st.warning(f"⚠️ **Обнаружена немонотонность:** {mono_v_raw:.1f}% нарушений, но калибровка не применялась")
-
-            # Отладочный режим (ТЗ 10)
-            with st.expander("🔍 Техническая диагностика (Debug)"):
-                # Формируем полный JSON лог по ТЗ 10 (используем model_result)
-                debug_info = {
-                    "model_result": model_result,  # Единый источник данных
-                    "features_used": model_result.get("features_used", []),
-                    "pipeline_log": model_result.get("pipeline_log", []),  # Канонический атрибут
-                    "sanity_check": {
-                        "errors": sanity_errors,
-                        "status": "PASS" if not sanity_errors else "FAIL"
-                    }
-                }
-                st.json(debug_info)
-                
-                st.write("**Средняя эластичность на диапазоне (наклон ln(q)~ln(p)):**")
-                e_global = e_info.get("elasticity_med", 0)
-                global_reg = e_info.get("global_regression", {})
-                r2 = global_reg.get("r_squared")
-                n_points = global_reg.get("n_points", 0)
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Средняя эластичность", fmt_e(e_global))
-                with col2:
-                    if r2 is not None:
-                        st.metric("R² регрессии", f"{r2:.3f}")
-                    else:
-                        st.metric("R² регрессии", "N/A")
-                with col3:
-                    st.metric("Точек регрессии", f"{n_points}")
-                    
-                st.write("**Predicted Orders (grid):**")
-                st.line_chart(e_info.get("q_grid", []))
-                
-                # Локальная эластичность по сетке
-                e_grid = e_info.get("e_grid", [])
-                e_stats = e_info.get("e_stats", {})
-                q_grid_used = e_info.get("q_grid", [])
-                
-                # Проверяем количество точек по q_grid_used (ТЗ)
-                if len(q_grid_used) < 5:
-                    st.warning("⚠ Недостаточно данных для расчета локальной эластичности (len(q_grid_used) < 5)")
-                elif e_grid and len(e_grid) > 0 and e_stats.get("len", 0) > 0:
-                    st.write("**Локальная эластичность по сетке:**")
-                    
-                    # Фильтруем NaN для визуализации
-                    e_grid_clean = [e for e in e_grid if not np.isnan(e)]
-                    if e_grid_clean:
-                        st.line_chart(e_grid_clean)
-                    
-                    # Статистика локальной эластичности
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Min", fmt_e(e_stats.get("min", 0)))
-                    with col2:
-                        st.metric("Median", fmt_e(e_stats.get("median", 0)))
-                    with col3:
-                        st.metric("Max", fmt_e(e_stats.get("max", 0)))
-                    with col4:
-                        st.metric("Std", f"{e_stats.get('std', 0):.3f}")
-                    
-                    # Проверка на баг "копирования" (ТЗ 2.3)
-                    if len(e_grid_clean) > 1:
-                        all_same = all(abs(e - e_grid_clean[0]) < 1e-10 for e in e_grid_clean)
-                        if all_same:
-                            st.error("⚠️ Обнаружен баг: все значения локальной эластичности одинаковы!")
-                        else:
-                            std_val = e_stats.get('std', 0)
-                            if std_val > 0:
-                                st.success(f"✅ Локальная эластичность варьируется (std = {std_val:.3f})")
-                            else:
-                                st.warning("⚠️ Стандартное отклонение равно 0 (возможно, идеальная степенная функция)")
-                    
-                    st.write(f"**Длина e_grid:** {e_stats.get('len', 0)} точек")
-                    st.write(
-                        f"**Доля нулевых локальных эластичностей:** {e_stats.get('zero_share', 0.0):.1%}"
-                    )
-                    st.write(
-                        f"**Исключено невалидных точек:** {e_stats.get('excluded_invalid_points', 0)}"
-                    )
-                else:
-                    st.warning("⚠ Недостаточно данных для расчета локальной эластичности")
-                
-                # Показываем кривые спроса
-                st.write("**Кривые спроса:**")
-                
-                # Основная кривая (используется в расчетах)
-                st.line_chart(e_info.get("q_grid", []))
-                
-                # Дополнительные кривые если есть калибровка
-                q_grid_raw = e_info.get("q_grid_raw", [])
-                q_grid_calibrated = e_info.get("q_grid_calibrated", [])
-                calibrated = e_info.get("calibrated", False)
-                
-                if calibrated and q_grid_calibrated:
-                    st.write("**Сравнение кривых (сырая → калиброванная):**")
-                    comparison_df = pd.DataFrame({
-                        'Raw': q_grid_raw,
-                        'Calibrated': q_grid_calibrated,
-                        'Used': e_info.get("q_grid", [])
-                    })
-                    st.line_chart(comparison_df)
-                elif q_grid_raw and len(q_grid_raw) > 0:
-                    st.write("**Сырая кривая (калибровка не применялась):**")
-                    st.line_chart(q_grid_raw)
-                # RMSE vs Baseline (используем данные из model_result)
-                improvement = model_result.get("improvement_vs_baseline", 0)
-                st.write(f"🏆 Точность vs Baseline: **{improvement:+.1f}%**")
-                
-            # Проверка разрешения положительной эластичности (ТЗ 3.1) - строгие критерии
-            # Новое условие: сообщение только если эластичность реально положительная и стабильная
-            if e_med is not None and e_med > 0.1 and e_iqr < 0.3 and q_info.get("corr", 0) > 0.1:
-                st.info("💡 **Разрешена положительная эластичность:** эластичность > 0.1, IQR < 0.3, корреляция > 0.1. Сигнал качества/сезона.")
-            # Во всех остальных случаях сообщение не показывается (ТЗ)
+        # Детальная информация о принятии решения (только из model_result)
+        with st.expander("🔍 Логика защитных режимов"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Improvement vs Baseline", f"{model_result.get('improvement_vs_baseline', 0):.3f}")
+                st.metric("Data Quality", "✅ Хорошо" if model_result.get('quality', {}).get('data_ok', False) else "❌ Плохо")
+            with col2:
+                st.metric("Стабильность", model_result.get('stability_mode', 'N/A'))
+                st.metric("Монотонность", model_result.get('monotonicity_flag', 'N/A'))
             
-            # 3. Режимы стабильности и защитные режимов по ТЗ 7.2 - используем только model_result (ТЗ 6.1)
-            stability = model_result.get("stability_mode", "S1")
-            protective = model_result.get("protective_mode")
-            protective_logic = e_info.get("protective_logic", {})
-            
-            # Режим стабильности
-            if stability == "S1":
-                st.success(f"✅ **Стабильный спрос**: разрешён широкий поиск в пределах истории.")
-            elif stability == "S2":
-                st.warning(f"⚠️ **Умеренно нестабилен**: оптимизация ограничена историческим диапазоном цен.")
-            else:  # S3
-                st.warning(f"🛡️ **Нестабилен**: включён консервативный режим (локальный поиск/штраф/сценарии).")
-            
-            # Защитный режим
-            if protective == "scenario":
-                st.error(f"🚫 **Режим сценарного анализа:** {protective_logic.get('reason', 'Причина неизвестна')}")
-            elif protective == "conservative":
-                st.warning(f"⚠️ **Консервативный режим:** {protective_logic.get('reason', 'Причина неизвестна')}")
-            else:
-                st.success(f"✅ **Стандартная оптимизация:** {protective_logic.get('reason', 'Хорошие условия модели')}")
-                
-            # Детальная информация о принятии решения (только из model_result)
-            with st.expander("🔍 Логика защитных режимов"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Improvement vs Baseline", f"{model_result.get('improvement_vs_baseline', 0):.3f}")
-                    st.metric("Data Quality", "✅ Хорошо" if model_result.get('quality', {}).get('data_ok', False) else "❌ Плохо")
-                with col2:
-                    st.metric("Стабильность", model_result.get('stability_mode', 'N/A'))
-                    st.metric("Монотонность", model_result.get('monotonicity_flag', 'N/A'))
-                
-                st.write(f"**Причина режима:** {protective_logic.get('reason', 'N/A')}")
-                st.write(f"**Нарушения монотонности:** {protective_logic.get('mono_violations', 0):.1%}")
-            
-            # 4. Оптимизация или сценарный анализ (только из model_result)
-            protective = model_result.get("protective_mode")
-            if protective != "scenario":
-                p_min_allowed = results["price_before_spp"].min()
-                p_max_allowed = results["price_before_spp"].max()
-                st.caption(f"📏 Допустимый диапазон (до СПП): {p_min_allowed:.0f} – {p_max_allowed:.0f} ₽")
-            else:
-                st.info("💡 **Режим сценарного анализа:** модель недостаточно надежна для автоматического поиска оптимума. Оцените варианты изменения цены вручную.")
+            st.write(f"**Причина режима:** {protective_logic.get('reason', 'N/A')}")
+            st.write(f"**Нарушения монотонности:** {protective_logic.get('mono_violations', 0):.1%}")
+        
+        # 4. Оптимизация или сценарный анализ (только из model_result)
+        protective = model_result.get("protective_mode")
+        if protective != "scenario":
+            p_min_allowed = results["price_before_spp"].min()
+            p_max_allowed = results["price_before_spp"].max()
+            st.caption(f"📏 Допустимый диапазон (до СПП): {p_min_allowed:.0f} – {p_max_allowed:.0f} ₽")
+        else:
+            st.info("💡 **Режим сценарного анализа:** модель недостаточно надежна для автоматического поиска оптимума. Оцените варианты изменения цены вручную.")
 
         # --- Результаты сравнения с последней ценой ---
         # ЖЕСТКИЙ GATING: оптимизация только при OK состоянии данных
