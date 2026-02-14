@@ -74,10 +74,32 @@ def optimize_price(
                 len(price_points), price_min, price_max, step)
     
     # Интерфейсные проверки forecaster
-    required_methods = ['predict', 'get_info']
-    missing_methods = [method for method in required_methods if not hasattr(forecaster, method)]
+    has_get_info = callable(getattr(forecaster, "get_info", None))
+    has_predict_sales = callable(getattr(forecaster, "predict_sales", None))
+    has_predict = callable(getattr(forecaster, "predict", None))
+
+    missing_methods = []
+    if not has_get_info:
+        missing_methods.append("get_info")
+    if not (has_predict_sales or has_predict):
+        missing_methods.append("predict_sales|predict")
     if missing_methods:
         raise ValueError(f"Forecaster missing required methods: {missing_methods}")
+
+    def _predict_qty(price_after_spp: float, features: Dict[str, Any]) -> float:
+        """Совместимый вызов прогноза для старого и нового интерфейсов."""
+        if has_predict_sales:
+            return float(forecaster.predict_sales(price_after_spp, features))
+
+        # Legacy fallback: predict(price, features) or predict(price)
+        try:
+            pred = forecaster.predict(price_after_spp, features)
+        except TypeError:
+            pred = forecaster.predict(price_after_spp)
+
+        if isinstance(pred, (list, tuple, np.ndarray, pd.Series)):
+            return float(pred[0])
+        return float(pred)
     
     # Проверка что forecaster обучен
     forecaster_info = getattr(forecaster, 'get_info', lambda: {})()
@@ -159,7 +181,7 @@ def optimize_price(
             
             # Прогноз для текущей цены
             logger.debug("Calling predict_sales")
-            q_last = forecaster.predict_sales(current_p_after, base_features)
+            q_last = _predict_qty(current_p_after, base_features)
             logger.debug("Got q_last: %s", q_last)
             
             current_profit_daily = m_last * q_last
@@ -233,7 +255,7 @@ def optimize_price(
     
     for p in prices:
         p_after = p * (1.0 - spp)
-        q = forecaster.predict_sales(p_after, base_features)
+        q = _predict_qty(p_after, base_features)
         raw_preds.append(q)
         customer_prices.append(p_after)
     
