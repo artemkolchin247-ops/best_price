@@ -500,8 +500,12 @@ def main():
             st.session_state["best_info"] = best_info
             st.session_state["current_sku"] = selected_sku
 
+    # Значения по умолчанию, чтобы избежать UnboundLocalError до первого запуска оптимизации
+    model_result = {}
+    has_results = "results" in st.session_state and st.session_state.get("current_sku") == selected_sku
+
     # Check if we have results in session state for the selected SKU
-    if "results" in st.session_state and st.session_state.get("current_sku") == selected_sku:
+    if has_results:
         sf = st.session_state["sf"]
         results = st.session_state["results"]
         best_info = st.session_state["best_info"]
@@ -751,6 +755,10 @@ def main():
         p_max_hist = sku_df["price_before_spp"].max()
         st.write(f"Исторический диапазон цен (до СПП): **{p_min_hist:.0f} — {p_max_hist:.0f} RUB**")
     
+    if not has_results:
+        st.info("Запустите оптимизацию, чтобы увидеть анализ спроса и эластичности.")
+        return
+
     st.subheader("1. Анализ спроса и эластичности")
     
     # ⚠️ ВАЖНО: Запрещено пересчитывать метрики в UI! (ТЗ 1.2)
