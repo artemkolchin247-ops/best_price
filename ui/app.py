@@ -751,7 +751,7 @@ def main():
         p_max_hist = sku_df["price_before_spp"].max()
         st.write(f"Исторический диапазон цен (до СПП): **{p_min_hist:.0f} — {p_max_hist:.0f} RUB**")
     
-    st.subheader("1. Анализ спроса и эластичности")
+        st.subheader("1. Анализ спроса и эластичности")
         
         # ⚠️ ВАЖНО: Запрещено пересчитывать метрики в UI! (ТЗ 1.2)
         # Использовать только данные из model_result
@@ -788,7 +788,7 @@ def main():
                     return f"{val:.4f}"
                 else:
                     return f"{val:.2f}"
-
+    
             e_med = e_info.get("elasticity_med", 0.0)
             e_iqr = e_info.get("elasticity_iqr", 0.0)
             
@@ -874,7 +874,7 @@ def main():
                 st.info(f"🔧 **Применена калибровка:** исходные нарушения {mono_v_raw:.1f}% → после калибровки {mono_v:.1f}%")
             elif mono_v_raw > 20:
                 st.warning(f"⚠️ **Обнаружена немонотонность:** {mono_v_raw:.1f}% нарушений, но калибровка не применялась")
-
+    
             # Отладочный режим (ТЗ 10)
             with st.expander("🔍 Техническая диагностика (Debug)"):
                 # Формируем полный JSON лог по ТЗ 10 (используем model_result)
@@ -1032,296 +1032,296 @@ def main():
                 st.caption(f"📏 Допустимый диапазон (до СПП): {p_min_allowed:.0f} – {p_max_allowed:.0f} ₽")
             else:
                 st.info("💡 **Режим сценарного анализа:** модель недостаточно надежна для автоматического поиска оптимума. Оцените варианты изменения цены вручную.")
-
-        # --- Результаты сравнения с последней ценой ---
-        # ЖЕСТКИЙ GATING: оптимизация только при OK состоянии данных
-        data_state = model_result.get("data_state", "UNKNOWN")
-        if data_state != "OK":
-            st.error("🚫 **Оптимизация недоступна:** состояние данных не позволяет провести анализ")
-            return
-        
-        # Gating по improvement (порог доверия)
-        improvement = model_result.get("improvement_vs_baseline", 0)
-        if improvement < 0.05:
-            st.warning("⚠️ **Низкое доверие к модели:** improvement < 5%")
-            st.info("💡 Показаны только сценарные расчеты. Точный оптимум недоступен.")
-            show_scenario_only = True
-        elif improvement < 0.10:
-            st.warning("⚠️ **Умеренное доверие к модели:** improvement 5-10%")
-            st.info("💡 Рекомендуется использовать сценарный анализ вместо точного оптимума.")
-            show_scenario_only = False  # Оставляем выбор пользователю
-        else:
-            show_scenario_only = False
-        
-        st.subheader("📊 Итоги оптимизации")
-        
-        # Данные за последнюю дату
-        last_row = sku_df.sort_values("date").iloc[-1]
-        last_p_before = float(last_row["price_before_spp"])
-        
-        # Расчет маржи для последней цены (по текущим правилам)
-        p_last = last_p_before
-        s_val = spp_pct / 100.0
-        p_after_last = p_last * (1.0 - s_val)
-        comm_last = p_last * (commission_pct / 100.0)
-        vat_last = p_after_last * (vat_pct / 100.0)
-        margin_last = p_last - comm_last - vat_last - cogs - logistics - storage
-
-        col1, col2, col3 = st.columns(3)
-        
-        if best_info:
-            # Расчет прогнозов для текущей цены
-            q_last = float(sf.predict_sales(p_after_last, {
-                "ad_internal": ad_internal,
-                "ad_bloggers": ad_bloggers,
-                "ad_vk": ad_vk
-            }))
-            # unit_margin считаем без рекламы (уже посчитано в margin_last)
-            # profit_last вычитаем рекламу
-            profit_last = (q_last * margin_last) - total_ad_spend
-            profitability_last = (margin_last / last_p_before) * 100
+    
+            # --- Результаты сравнения с последней ценой ---
+            # ЖЕСТКИЙ GATING: оптимизация только при OK состоянии данных
+            data_state = model_result.get("data_state", "UNKNOWN")
+            if data_state != "OK":
+                st.error("🚫 **Оптимизация недоступна:** состояние данных не позволяет провести анализ")
+                return
             
-            is_boundary_search = best_info.get("is_boundary_search", best_info.get("is_boundary", False))
-            is_boundary_history = best_info.get("is_boundary_history", False)
-            
-            # Логика защитных режимов и gating по improvement
-            protective = model_result.get("protective_mode")
-            
-            # Получаем значения эластичности для проверок
-            e_med = e_info.get("elasticity_med", 0.0)
-            e_iqr = e_info.get("elasticity_iqr", 0.0)
-            
-            # Дополнительное ограничение для положительной эластичности (ТЗ 3.3)
-            # Используем те же критерии что и в основном блоке
-            allow_positive_elasticity = (
-                e_med is not None and e_med > 0.1 and 
-                e_iqr < 0.3 and 
-                q_info.get("corr", 0) > 0.1
-            )
-            
-            # Объединенная логика show_scenario_only
-            if protective == "scenario" or improvement < 0.05:
-                # Приоритет 1: scenario режим OR improvement < 5%
+            # Gating по improvement (порог доверия)
+            improvement = model_result.get("improvement_vs_baseline", 0)
+            if improvement < 0.05:
+                st.warning("⚠️ **Низкое доверие к модели:** improvement < 5%")
+                st.info("💡 Показаны только сценарные расчеты. Точный оптимум недоступен.")
                 show_scenario_only = True
-                if improvement < 0.05:
-                    st.warning("⚠️ **Низкое доверие к модели:** improvement < 5%")
-                    st.info("💡 Показаны только сценарные расчеты. Точный оптимум недоступен.")
-                else:
-                    st.info("💡 **Режим сценарного анализа:** модель недостаточно надежна для автоматического поиска оптимума.")
             elif improvement < 0.10:
-                # Приоритет 2: improvement 5-10% → сценарии с выбором
-                show_scenario_only = False
                 st.warning("⚠️ **Умеренное доверие к модели:** improvement 5-10%")
                 st.info("💡 Рекомендуется использовать сценарный анализ вместо точного оптимума.")
-            elif protective == "conservative":
-                # Приоритет 3: conservative режим (только при improvement >= 10%)
-                show_scenario_only = False
-                st.warning("⚠️ **Консервативный режим:** модель показывает умеренную нестабильность. Оптимум ограничен, рекомендуем дополнительно оценить сценарии.")
-            elif is_boundary_search and (model_result.get("stability_mode") in ["S2", "S3"] or e_iqr > 0.4):
-                # Приоритет 4: граничное решение по поисковой сетке
-                show_scenario_only = False
-                st.warning("⚠️ **Граничное решение по сетке:** оптимальная цена находится на краю поискового диапазона. Реальный максимум прибыли может лежать вне перебираемого интервала.")
+                show_scenario_only = False  # Оставляем выбор пользователю
             else:
-                # Приоритет 5: стандартный режим (только при improvement >= 10%)
                 show_scenario_only = False
             
-            if e_med > 0 and allow_positive_elasticity:
-                # Ограничиваем оптимизацию: рост спроса допускается только в нижней части диапазона (p<=p60)
-                st.info("🔒 **Ограничение для положительной эластичности:** оптимизация ограничена нижней частью диапазона цен.")
-                # Это можно использовать в оптимизаторе для дополнительного ограничения
+            st.subheader("📊 Итоги оптимизации")
             
-            if show_scenario_only:
-                # --- Только сценарный анализ ---
-                st.markdown("#### 🧪 Сценарный анализ (Чувствительность)")
-                scenarios = [-0.10, -0.05, -0.02, 0, 0.02, 0.05, 0.10]
-                scenario_data = []                
-                for s in scenarios:
-                    p_test_before = last_p_before * (1 + s)
-                    p_test_after = p_test_before * (1.0 - s_val)
-                    q_test = float(sf.predict_sales(p_test_after, {"ad_internal": ad_internal, "ad_bloggers": ad_bloggers, "ad_vk": ad_vk}))
-                    
-                    # Unit Econ
-                    comm_test = p_test_before * (commission_pct / 100.0)
-                    vat_test = p_test_after * (vat_pct / 100.0)
-                    m_test = p_test_before - comm_test - vat_test - cogs - logistics - storage
-                    prof_test = (m_test * q_test) - total_ad_spend
-                    
-                    scenario_data.append({
-                        "Изменение": f"{s*100:+.0f}%",
-                        "Цена до СПП": f"{p_test_before:.0f} ₽",
-                        "Маржа (ед)": f"{m_test:.0f} ₽",
-                        "Заказы": f"{q_test:.1f}",
-                        "Прибыль": f"{prof_test:.0f} ₽",
-                        "Эффект П": f"{prof_test - profit_last:+.0f} ₽"
-                    })
-                
-                st.table(pd.DataFrame(scenario_data))
-                
-                if protective == "scenario":
-                    st.warning("⚠️ Внимание: Прогнозы в таблице выше могут быть неточными, так как модель спроса не показала значимого улучшения над базовым средним. Используйте эти данные как ориентир по маржинальности, а не как прогноз точности спроса.")
-                else:
-                    st.info("💡 Поскольку модель в данной зоне нестабильна, рекомендуется опираться на сценарную таблицу, а не на единичную точку оптимума.")
+            # Данные за последнюю дату
+            last_row = sku_df.sort_values("date").iloc[-1]
+            last_p_before = float(last_row["price_before_spp"])
             
-            else:
-                # --- Стандартный вывод Оптимума ---
-                # Оптимальные значения
-                q_opt = best_info['best_sales']
-                profit_opt = best_info['best_profit']
-                margin_opt = best_info['best_margin']
+            # Расчет маржи для последней цены (по текущим правилам)
+            p_last = last_p_before
+            s_val = spp_pct / 100.0
+            p_after_last = p_last * (1.0 - s_val)
+            comm_last = p_last * (commission_pct / 100.0)
+            vat_last = p_after_last * (vat_pct / 100.0)
+            margin_last = p_last - comm_last - vat_last - cogs - logistics - storage
+    
+            col1, col2, col3 = st.columns(3)
+            
+            if best_info:
+                # Расчет прогнозов для текущей цены
+                q_last = float(sf.predict_sales(p_after_last, {
+                    "ad_internal": ad_internal,
+                    "ad_bloggers": ad_bloggers,
+                    "ad_vk": ad_vk
+                }))
+                # unit_margin считаем без рекламы (уже посчитано в margin_last)
+                # profit_last вычитаем рекламу
+                profit_last = (q_last * margin_last) - total_ad_spend
+                profitability_last = (margin_last / last_p_before) * 100
                 
-                # Отладка ключей best_info
-                print(f"DEBUG: best_info keys: {list(best_info.keys())}")
+                is_boundary_search = best_info.get("is_boundary_search", best_info.get("is_boundary", False))
+                is_boundary_history = best_info.get("is_boundary_history", False)
                 
-                # Совместимость с разными версиями optimize_price
-                if 'best_price_before_spp' in best_info:
-                    p_opt_before = best_info['best_price_before_spp']
-                elif 'best_price_before' in best_info:
-                    p_opt_before = best_info['best_price_before']
-                    print("DEBUG: Using legacy key 'best_price_before'")
+                # Логика защитных режимов и gating по improvement
+                protective = model_result.get("protective_mode")
+                
+                # Получаем значения эластичности для проверок
+                e_med = e_info.get("elasticity_med", 0.0)
+                e_iqr = e_info.get("elasticity_iqr", 0.0)
+                
+                # Дополнительное ограничение для положительной эластичности (ТЗ 3.3)
+                # Используем те же критерии что и в основном блоке
+                allow_positive_elasticity = (
+                    e_med is not None and e_med > 0.1 and 
+                    e_iqr < 0.3 and 
+                    q_info.get("corr", 0) > 0.1
+                )
+                
+                # Объединенная логика show_scenario_only
+                if protective == "scenario" or improvement < 0.05:
+                    # Приоритет 1: scenario режим OR improvement < 5%
+                    show_scenario_only = True
+                    if improvement < 0.05:
+                        st.warning("⚠️ **Низкое доверие к модели:** improvement < 5%")
+                        st.info("💡 Показаны только сценарные расчеты. Точный оптимум недоступен.")
+                    else:
+                        st.info("💡 **Режим сценарного анализа:** модель недостаточно надежна для автоматического поиска оптимума.")
+                elif improvement < 0.10:
+                    # Приоритет 2: improvement 5-10% → сценарии с выбором
+                    show_scenario_only = False
+                    st.warning("⚠️ **Умеренное доверие к модели:** improvement 5-10%")
+                    st.info("💡 Рекомендуется использовать сценарный анализ вместо точного оптимума.")
+                elif protective == "conservative":
+                    # Приоритет 3: conservative режим (только при improvement >= 10%)
+                    show_scenario_only = False
+                    st.warning("⚠️ **Консервативный режим:** модель показывает умеренную нестабильность. Оптимум ограничен, рекомендуем дополнительно оценить сценарии.")
+                elif is_boundary_search and (model_result.get("stability_mode") in ["S2", "S3"] or e_iqr > 0.4):
+                    # Приоритет 4: граничное решение по поисковой сетке
+                    show_scenario_only = False
+                    st.warning("⚠️ **Граничное решение по сетке:** оптимальная цена находится на краю поискового диапазона. Реальный максимум прибыли может лежать вне перебираемого интервала.")
                 else:
-                    st.error("❌ Не удалось получить оптимальную цену из результатов оптимизации")
-                    return
+                    # Приоритет 5: стандартный режим (только при improvement >= 10%)
+                    show_scenario_only = False
                 
-                p_opt_after = best_info['best_customer_price']
-                profitability_opt = (margin_opt / p_opt_before) * 100
-
-                # --- Метрика 1: Цены ---
-                st.markdown("#### 💰 Сравнение цен")
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    st.metric("Цена до СПП", f"{p_opt_before:.0f} ₽", 
-                            delta=f"{p_opt_before - last_p_before:+.0f} ₽")
-                    st.caption(f"Текущая: {last_p_before:.0f} ₽")
-                with c2:
-                    st.metric("Цена клиента", f"{p_opt_after:.0f} ₽",
-                            delta=f"{p_opt_after - p_after_last:+.0f} ₽")
-                    st.caption(f"Текущая: {p_after_last:.0f} ₽")
-                with c3:
-                    st.metric("Маржинальность", f"{profitability_opt:.1f}%",
-                            delta=f"{profitability_opt - profitability_last:+.1f}%")
-                    st.caption(f"Текущая: {profitability_last:.1f}%")
-
-                # --- Метрика 2: Прогнозы ---
-                st.markdown("#### 📈 Прогноз эффекта")
-                c4, c5, c6 = st.columns(3)
-                with c4:
-                    st.metric("Заказы (шт/день)", f"{q_opt:.1f}",
-                            delta=f"{q_opt - q_last:+.1f}")
-                    st.caption(f"Текущая: {q_last:.1f}")
-                with c5:
-                    st.metric("Прибыль (₽/день)", f"{profit_opt:.0f} ₽",
-                            delta=f"{profit_opt - profit_last:+.0f} ₽")
-                    st.caption(f"Текущая: {profit_last:.0f} ₽")
-                with c6:
-                    profit_delta = profit_opt - profit_last
-                    st.metric("Прирост прибыли", f"{profit_delta:+.0f} ₽",
-                            delta=f"{(profit_delta/max(1.0, profit_last)*100):+.1f}%")
-                    st.caption("К текущему уровню")
-
-                st.write(f"💰 Чистая маржа с единицы: **{margin_opt:.2f} ₽**")
+                if e_med > 0 and allow_positive_elasticity:
+                    # Ограничиваем оптимизацию: рост спроса допускается только в нижней части диапазона (p<=p60)
+                    st.info("🔒 **Ограничение для положительной эластичности:** оптимизация ограничена нижней частью диапазона цен.")
+                    # Это можно использовать в оптимизаторе для дополнительного ограничения
                 
-                # Проверка граничного решения (по ТЗ)
-                if is_boundary_search:
-                    st.warning("⚠️ **Оптимальная цена на границе поисковой сетки.** Реальный максимум прибыли может лежать за пределами перебираемого диапазона.")
-
-                if is_boundary_history:
-                    st.warning("⚠️ **Оптимальная цена у границы исторического диапазона.** Повышен риск смещения оптимума за пределы наблюдавшихся цен.")
-
-                # Асимметричная проверка экстраполяции (по ТЗ)
-                tol = 0.02
-                if p_opt_before > p_max_hist * (1 + tol):
-                    st.warning(f"⚠️ **Риск: модель экстраполирует вверх.** Оптимальная цена ({p_opt_before:.0f} ₽) значительно выше исторического максимума. Спрос может обвалиться сильнее, чем прогнозирует модель.")
-                elif p_opt_before < p_min_hist * (1 - tol):
-                    st.info(f"ℹ️ **Экстраполяция вниз:** Оптимальная цена ({p_opt_before:.0f} ₽) ниже исторического минимума. Прогноз роста продаж основан на экстраполяции модели.")
+                if show_scenario_only:
+                    # --- Только сценарный анализ ---
+                    st.markdown("#### 🧪 Сценарный анализ (Чувствительность)")
+                    scenarios = [-0.10, -0.05, -0.02, 0, 0.02, 0.05, 0.10]
+                    scenario_data = []                
+                    for s in scenarios:
+                        p_test_before = last_p_before * (1 + s)
+                        p_test_after = p_test_before * (1.0 - s_val)
+                        q_test = float(sf.predict_sales(p_test_after, {"ad_internal": ad_internal, "ad_bloggers": ad_bloggers, "ad_vk": ad_vk}))
+                        
+                        # Unit Econ
+                        comm_test = p_test_before * (commission_pct / 100.0)
+                        vat_test = p_test_after * (vat_pct / 100.0)
+                        m_test = p_test_before - comm_test - vat_test - cogs - logistics - storage
+                        prof_test = (m_test * q_test) - total_ad_spend
+                        
+                        scenario_data.append({
+                            "Изменение": f"{s*100:+.0f}%",
+                            "Цена до СПП": f"{p_test_before:.0f} ₽",
+                            "Маржа (ед)": f"{m_test:.0f} ₽",
+                            "Заказы": f"{q_test:.1f}",
+                            "Прибыль": f"{prof_test:.0f} ₽",
+                            "Эффект П": f"{prof_test - profit_last:+.0f} ₽"
+                        })
+                    
+                    st.table(pd.DataFrame(scenario_data))
+                    
+                    if protective == "scenario":
+                        st.warning("⚠️ Внимание: Прогнозы в таблице выше могут быть неточными, так как модель спроса не показала значимого улучшения над базовым средним. Используйте эти данные как ориентир по маржинальности, а не как прогноз точности спроса.")
+                    else:
+                        st.info("💡 Поскольку модель в данной зоне нестабильна, рекомендуется опираться на сценарную таблицу, а не на единичную точку оптимума.")
                 
-                # --- Управленческая рекомендация на основе Grid Search ---
-                st.divider()
-                
-                # Совместимость с разными версиями optimize_price
-                if 'best_price_before_spp' in best_info:
-                    opt_p = best_info['best_price_before_spp']
-                elif 'best_price_before' in best_info:
-                    opt_p = best_info['best_price_before']
                 else:
-                    st.error("❌ Не удалось получить оптимальную цену для рекомендаций")
-                    return
+                    # --- Стандартный вывод Оптимума ---
+                    # Оптимальные значения
+                    q_opt = best_info['best_sales']
+                    profit_opt = best_info['best_profit']
+                    margin_opt = best_info['best_margin']
+                    
+                    # Отладка ключей best_info
+                    print(f"DEBUG: best_info keys: {list(best_info.keys())}")
+                    
+                    # Совместимость с разными версиями optimize_price
+                    if 'best_price_before_spp' in best_info:
+                        p_opt_before = best_info['best_price_before_spp']
+                    elif 'best_price_before' in best_info:
+                        p_opt_before = best_info['best_price_before']
+                        print("DEBUG: Using legacy key 'best_price_before'")
+                    else:
+                        st.error("❌ Не удалось получить оптимальную цену из результатов оптимизации")
+                        return
+                    
+                    p_opt_after = best_info['best_customer_price']
+                    profitability_opt = (margin_opt / p_opt_before) * 100
+    
+                    # --- Метрика 1: Цены ---
+                    st.markdown("#### 💰 Сравнение цен")
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        st.metric("Цена до СПП", f"{p_opt_before:.0f} ₽", 
+                                delta=f"{p_opt_before - last_p_before:+.0f} ₽")
+                        st.caption(f"Текущая: {last_p_before:.0f} ₽")
+                    with c2:
+                        st.metric("Цена клиента", f"{p_opt_after:.0f} ₽",
+                                delta=f"{p_opt_after - p_after_last:+.0f} ₽")
+                        st.caption(f"Текущая: {p_after_last:.0f} ₽")
+                    with c3:
+                        st.metric("Маржинальность", f"{profitability_opt:.1f}%",
+                                delta=f"{profitability_opt - profitability_last:+.1f}%")
+                        st.caption(f"Текущая: {profitability_last:.1f}%")
+    
+                    # --- Метрика 2: Прогнозы ---
+                    st.markdown("#### 📈 Прогноз эффекта")
+                    c4, c5, c6 = st.columns(3)
+                    with c4:
+                        st.metric("Заказы (шт/день)", f"{q_opt:.1f}",
+                                delta=f"{q_opt - q_last:+.1f}")
+                        st.caption(f"Текущая: {q_last:.1f}")
+                    with c5:
+                        st.metric("Прибыль (₽/день)", f"{profit_opt:.0f} ₽",
+                                delta=f"{profit_opt - profit_last:+.0f} ₽")
+                        st.caption(f"Текущая: {profit_last:.0f} ₽")
+                    with c6:
+                        profit_delta = profit_opt - profit_last
+                        st.metric("Прирост прибыли", f"{profit_delta:+.0f} ₽",
+                                delta=f"{(profit_delta/max(1.0, profit_last)*100):+.1f}%")
+                        st.caption("К текущему уровню")
+    
+                    st.write(f"💰 Чистая маржа с единицы: **{margin_opt:.2f} ₽**")
+                    
+                    # Проверка граничного решения (по ТЗ)
+                    if is_boundary_search:
+                        st.warning("⚠️ **Оптимальная цена на границе поисковой сетки.** Реальный максимум прибыли может лежать за пределами перебираемого диапазона.")
+    
+                    if is_boundary_history:
+                        st.warning("⚠️ **Оптимальная цена у границы исторического диапазона.** Повышен риск смещения оптимума за пределы наблюдавшихся цен.")
+    
+                    # Асимметричная проверка экстраполяции (по ТЗ)
+                    tol = 0.02
+                    if p_opt_before > p_max_hist * (1 + tol):
+                        st.warning(f"⚠️ **Риск: модель экстраполирует вверх.** Оптимальная цена ({p_opt_before:.0f} ₽) значительно выше исторического максимума. Спрос может обвалиться сильнее, чем прогнозирует модель.")
+                    elif p_opt_before < p_min_hist * (1 - tol):
+                        st.info(f"ℹ️ **Экстраполяция вниз:** Оптимальная цена ({p_opt_before:.0f} ₽) ниже исторического минимума. Прогноз роста продаж основан на экстраполяции модели.")
+                    
+                    # --- Управленческая рекомендация на основе Grid Search ---
+                    st.divider()
+                    
+                    # Совместимость с разными версиями optimize_price
+                    if 'best_price_before_spp' in best_info:
+                        opt_p = best_info['best_price_before_spp']
+                    elif 'best_price_before' in best_info:
+                        opt_p = best_info['best_price_before']
+                    else:
+                        st.error("❌ Не удалось получить оптимальную цену для рекомендаций")
+                        return
+                    
+                    last_p = last_p_before
+                    delta_p = (opt_p - last_p) / last_p
+                    
+                    # Рекомендованный диапазон
+                    stability = model_result.get("stability_mode", "S1")
+                    if stability == "S3":
+                        # В нестабильном режиме даем узкий диапазон
+                        range_low = opt_p * 0.97
+                        range_high = opt_p * 1.03
+                        st.info(f"📍 **Локальный оптимум:** {opt_p:.0f} ₽")
+                        st.markdown(f"📏 **Рекомендованный диапазон:** `{range_low:.0f} – {range_high:.0f} ₽`")
+                    else:
+                        st.markdown(f"🎯 **Целевая цена:** `{opt_p:.0f} ₽`")
+    
+                    if delta_p > 0.01:
+                        st.success(f"🚀 **Рекомендация:** Модель считает, что цену выгодно повысить на {delta_p*100:.1f}%.")
+                    elif delta_p < -0.01:
+                        st.info(f"💡 **Рекомендация:** Модель считает, что цену выгодно снизить на {abs(delta_p)*100:.1f}%.")
+                    else:
+                        st.success("🎯 **Рекомендация:** Текущая цена близка к математическому оптимуму.")
                 
-                last_p = last_p_before
-                delta_p = (opt_p - last_p) / last_p
-                
-                # Рекомендованный диапазон
+                # Проверка ограничений по режимам стабильности
                 stability = model_result.get("stability_mode", "S1")
-                if stability == "S3":
-                    # В нестабильном режиме даем узкий диапазон
-                    range_low = opt_p * 0.97
-                    range_high = opt_p * 1.03
-                    st.info(f"📍 **Локальный оптимум:** {opt_p:.0f} ₽")
-                    st.markdown(f"📏 **Рекомендованный диапазон:** `{range_low:.0f} – {range_high:.0f} ₽`")
-                else:
-                    st.markdown(f"🎯 **Целевая цена:** `{opt_p:.0f} ₽`")
-
-                if delta_p > 0.01:
-                    st.success(f"🚀 **Рекомендация:** Модель считает, что цену выгодно повысить на {delta_p*100:.1f}%.")
-                elif delta_p < -0.01:
-                    st.info(f"💡 **Рекомендация:** Модель считает, что цену выгодно снизить на {abs(delta_p)*100:.1f}%.")
-                else:
-                    st.success("🎯 **Рекомендация:** Текущая цена близка к математическому оптимуму.")
+                if stability != "S1":
+                    st.caption(f"ℹ️ Рекомендация ограничена режимом `{stability}` из-за особенностей данных/модели.")
+    
+    
+            # Demand Curve with markers - только при OK состоянии данных
+            if data_state != "OK":
+                st.error("🚫 **Визуализация недоступна:** состояние данных не позволяет провести анализ")
+                return
+                
+            st.subheader("Кривая спроса (Прогноз)")
+            fig1 = px.line(results, x="price_before_spp", y="predicted_sales", markers=True, title="Зависимость продаж от цены (до СПП)")
+            # Add historical range vertical lines
+            fig1.add_vline(x=p_min_hist, line_dash="dash", line_color="gray", annotation_text="Min Hist")
+            fig1.add_vline(x=p_max_hist, line_dash="dash", line_color="gray", annotation_text="Max Hist")
+            st.plotly_chart(fig1, use_container_width=True)
+    
+            st.subheader("Диагностика: Actual vs Predicted")
+            # Debug логирование перед диагностикой (ТЗ)
+            logger.debug("model_name before predict_on_df: %s", sf.best_model_name)
+            logger.debug("data_state before predict_on_df: %s", getattr(sf, "data_state", "UNKNOWN"))
+            logger.debug("fit_return before predict_on_df: %s", getattr(sf, "_fit_return_value", "UNKNOWN"))
             
-            # Проверка ограничений по режимам стабильности
-            stability = model_result.get("stability_mode", "S1")
-            if stability != "S1":
-                st.caption(f"ℹ️ Рекомендация ограничена режимом `{stability}` из-за особенностей данных/модели.")
-
-
-        # Demand Curve with markers - только при OK состоянии данных
-        if data_state != "OK":
-            st.error("🚫 **Визуализация недоступна:** состояние данных не позволяет провести анализ")
-            return
+            diag_df = sku_df.copy()
+            diag_df["predicted_orders"] = sf.predict_on_df(diag_df)
+            diag_df["error_pct"] = (diag_df["predicted_orders"] - diag_df["orders"]).abs() / diag_df["orders"].replace(0, 1) * 100
             
-        st.subheader("Кривая спроса (Прогноз)")
-        fig1 = px.line(results, x="price_before_spp", y="predicted_sales", markers=True, title="Зависимость продаж от цены (до СПП)")
-        # Add historical range vertical lines
-        fig1.add_vline(x=p_min_hist, line_dash="dash", line_color="gray", annotation_text="Min Hist")
-        fig1.add_vline(x=p_max_hist, line_dash="dash", line_color="gray", annotation_text="Max Hist")
-        st.plotly_chart(fig1, use_container_width=True)
-
-        st.subheader("Диагностика: Actual vs Predicted")
-        # Debug логирование перед диагностикой (ТЗ)
-        logger.debug("model_name before predict_on_df: %s", sf.best_model_name)
-        logger.debug("data_state before predict_on_df: %s", getattr(sf, "data_state", "UNKNOWN"))
-        logger.debug("fit_return before predict_on_df: %s", getattr(sf, "_fit_return_value", "UNKNOWN"))
-        
-        diag_df = sku_df.copy()
-        diag_df["predicted_orders"] = sf.predict_on_df(diag_df)
-        diag_df["error_pct"] = (diag_df["predicted_orders"] - diag_df["orders"]).abs() / diag_df["orders"].replace(0, 1) * 100
-        
-        fig_diag = px.scatter(diag_df, x="date", y=["orders", "predicted_orders"], title="Сравнение факта и прогноза на истории")
-        st.plotly_chart(fig_diag, use_container_width=True)
-        
-        st.write("Последние 10 дней истории с прогнозом:")
-        st.dataframe(diag_df[["date", "price_before_spp", "orders", "predicted_orders", "error_pct"]].tail(10))
-
-        st.subheader("Таблица всех расчётов")
-        # Убираем дублирующую колонку price_before если она есть (совместимость со старыми версиями)
-        results_clean = results.copy()
-        if "price_before" in results_clean.columns:
-            results_clean = results_clean.drop(columns=["price_before"])
-            print("DEBUG: Removed duplicate 'price_before' column")
-        
-        # Переименовываем колонки для понятности пользователю
-        results_display = results_clean.rename(columns={
-            "price_before_spp": "Цена до СПП",
-            "price_after_spp": "Цена после СПП", 
-            "predicted_sales": "Прогноз заказов",
-            "margin_unit": "Маржа на единицу",
-            "profit": "Прибыль",
-            "is_extrapolated": "Экстраполяция"
-        })
-        st.dataframe(results_display)
-
-        csv = results_display.to_csv(index=False).encode("utf-8")
-        st.download_button("Скачать CSV", csv, "optimization_results.csv", "text/csv")
-
+            fig_diag = px.scatter(diag_df, x="date", y=["orders", "predicted_orders"], title="Сравнение факта и прогноза на истории")
+            st.plotly_chart(fig_diag, use_container_width=True)
+            
+            st.write("Последние 10 дней истории с прогнозом:")
+            st.dataframe(diag_df[["date", "price_before_spp", "orders", "predicted_orders", "error_pct"]].tail(10))
+    
+            st.subheader("Таблица всех расчётов")
+            # Убираем дублирующую колонку price_before если она есть (совместимость со старыми версиями)
+            results_clean = results.copy()
+            if "price_before" in results_clean.columns:
+                results_clean = results_clean.drop(columns=["price_before"])
+                print("DEBUG: Removed duplicate 'price_before' column")
+            
+            # Переименовываем колонки для понятности пользователю
+            results_display = results_clean.rename(columns={
+                "price_before_spp": "Цена до СПП",
+                "price_after_spp": "Цена после СПП", 
+                "predicted_sales": "Прогноз заказов",
+                "margin_unit": "Маржа на единицу",
+                "profit": "Прибыль",
+                "is_extrapolated": "Экстраполяция"
+            })
+            st.dataframe(results_display)
+    
+            csv = results_display.to_csv(index=False).encode("utf-8")
+            st.download_button("Скачать CSV", csv, "optimization_results.csv", "text/csv")
+    
 
 if __name__ == "__main__":
     main()
