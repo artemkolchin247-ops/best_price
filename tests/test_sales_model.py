@@ -17,6 +17,9 @@ def test_sales_forecaster_basic(tmp_path):
     pred = sf.predict_sales(990)
     assert isinstance(pred, float)
     assert pred >= 0.0
+    legacy_pred = sf.predict(990)
+    assert isinstance(legacy_pred, float)
+    assert legacy_pred >= 0.0
 
 
 def test_local_elasticity_excludes_invalid_points_and_reports_debug_metrics():

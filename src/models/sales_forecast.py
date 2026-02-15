@@ -1463,5 +1463,14 @@ class SalesForecaster:
         model = self.models[self.best_model_name]
         return pd.Series(model.predict(X), index=df.index)
 
+    def predict(self, price: float, features_row: Optional[Dict[str, Any]] = None) -> float:
+        """Совместимость со старым интерфейсом forecaster.predict(...).
+
+        Некоторые сценарии оптимизации ожидают наличие метода `predict`.
+        Делегируем его в канонический `predict_sales`, чтобы поддерживать
+        оба контракта без дублирования логики.
+        """
+        return self.predict_sales(price=price, features_row=features_row)
+
 
 __all__ = ["SalesForecaster", "LogLogModel", "RFModel", "PoissonModel"]
